@@ -16,6 +16,11 @@ SRC = Path.home() / "图片处理程序"
 OUT = Path(__file__).resolve().parent
 TOOLS = OUT / "tools"
 
+# 原文件里刻意不放进网站的工具（不再提示“没有放进网站”）
+EXCLUDE = {
+    "image/ascii/动态ascii.html",  # ASCII-LIVE，2026-10-30 用户要求删除
+}
+
 # 一张卡片 = 一个效果；versions 里多个文件 = 卡片上可切换的版本
 # art: 卡片缩略图的生成图案（见 template.html 里的 ART）
 CARDS = [
@@ -26,9 +31,6 @@ CARDS = [
     dict(id="ascii-forge", cat="image", name="ASCII-FORGE", zh="分区字符艺术引擎", accent="#00d2ff", art="ascii",
          desc="按区域把图像转成字符画，可导出 JPG / SVG。",
          versions=[("image/ascii/ascii完整版.html", "终极版")]),
-    dict(id="ascii-live", cat="image", name="ASCII-LIVE", zh="动态字符 · 视频录制", accent="#00ff9d", art="ascii",
-         desc="实时字符化视频，并直接录制输出。",
-         versions=[("image/ascii/动态ascii.html", "视频录制版")]),
     dict(id="riso", cat="image", name="SPECTRAL-RISO", zh="孔版印刷", accent="#ff48b0", art="riso",
          desc="分色错位与网点，模拟 Risograph 印刷质感。",
          versions=[("image/riso/孔板印刷.html", "印刷级输出版")]),
@@ -124,7 +126,7 @@ def main():
 
     # 检查有没有漏掉的源文件
     covered = {rel for c in CARDS for rel, _ in c["versions"]}
-    missing = sorted(str(p.relative_to(SRC)) for p in SRC.rglob("*.html") if str(p.relative_to(SRC)) not in covered)
+    missing = sorted(str(p.relative_to(SRC)) for p in SRC.rglob("*.html") if str(p.relative_to(SRC)) not in covered | EXCLUDE)
     if missing:
         print("⚠️  这些源文件没有放进网站：", *missing, sep="\n  ")
 
