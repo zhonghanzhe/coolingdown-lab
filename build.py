@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """把 ~/图片处理程序 里的工具合并成一个网站。
 
-原文件不动：复制到 tools/<slug>.html，注入返回按钮，再生成 index.html。
-改了原文件之后重新运行： python3 build.py
+tools/<slug>.html 现在是网站自己的版本（已接入统一导出面板 lab-export.js），
+build.py 不会再覆盖已有的工具页，只会：
+  1. 把 CARDS 里新加的、tools/ 里还没有的工具从原文件导入（注入返回按钮）；
+  2. 重新生成 index.html。
+新导入的工具需要手动在页面底部加 LabExport.setup(...) 才会有导出面板。
+想用原文件重新覆盖某个工具页：先删掉 tools/<slug>.html 再运行。
 """
 import json
 import re
-import shutil
 from pathlib import Path
 
 SRC = Path.home() / "图片处理程序"
@@ -90,15 +93,20 @@ BACK_BUTTON = """
 
 
 def main():
-    if TOOLS.exists():
-        shutil.rmtree(TOOLS)
-    TOOLS.mkdir(parents=True)
+    TOOLS.mkdir(parents=True, exist_ok=True)
+    imported = []
 
     used = set()
     manifest = []
     for card in CARDS:
         versions = []
         for i, (rel, label) in enumerate(card["versions"]):
+            slug = card["id"] if len(card["versions"]) == 1 else f"{card['id']}-{i + 1}"
+            assert slug not in used, slug
+            used.add(slug)
+            versions.append({"label": label, "href": f"tools/{slug}.html"})
+            if (TOOLS / f"{slug}.html").exists():
+                continue
             src = SRC / rel
             html = src.read_text(encoding="utf-8")
             if "</body>" not in html:
@@ -106,13 +114,13 @@ def main():
             # 插在最后一个 </body> 之前
             idx = html.rfind("</body>")
             html = html[:idx] + BACK_BUTTON + html[idx:]
-            slug = card["id"] if len(card["versions"]) == 1 else f"{card['id']}-{i + 1}"
-            assert slug not in used, slug
-            used.add(slug)
             (TOOLS / f"{slug}.html").write_text(html, encoding="utf-8")
-            versions.append({"label": label, "href": f"tools/{slug}.html"})
+            imported.append(slug)
         manifest.append({k: card[k] for k in ("id", "cat", "name", "zh", "accent", "art", "desc")}
                         | {"versions": versions})
+
+    if imported:
+        print("新导入（还没有导出面板，需要加 LabExport.setup）：", *imported, sep="\n  ")
 
     # 检查有没有漏掉的源文件
     covered = {rel for c in CARDS for rel, _ in c["versions"]}

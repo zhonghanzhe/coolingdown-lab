@@ -600,6 +600,31 @@
 
     </script>
 
+<script src="../lab-export.js"></script>
+<script>
+  // COOLINGDOWN LAB 统一导出
+  LabExport.setup({
+    name: 'type-mutant-v24',
+    image: { default: 4096, sizes: [{value: 2048, label: '2048px'}, {value: 4096, label: '4096px'}, {value: 8192, label: '8192px'}], note: '导出当前主预览字符的高清大图；SVG 可直接在 AI 里用路径查找器联集。',
+      render: async px => {
+      const W = 400, s = px / W;
+      const parts = sampleFont(config.char, W, W);
+      const A = document.createElement('canvas'); A.width = A.height = px;
+      const a = A.getContext('2d'); a.scale(s, s);
+      renderParticles(a, parts, W, W, 1);
+      if (!(config.mode === 'liquid')) return A;
+      const bg = config.bg === 'white' ? '#fff' : '#000';
+      const B = document.createElement('canvas'); B.width = B.height = px;
+      const b = B.getContext('2d'); b.fillStyle = bg; b.fillRect(0, 0, px, px);
+      b.filter = `blur(${config.blur * s}px)`; b.drawImage(A, 0, 0);
+      const C = document.createElement('canvas'); C.width = C.height = px;
+      const c = C.getContext('2d'); c.filter = `contrast(${config.contrast})`; c.drawImage(B, 0, 0);
+      return C;
+    } },
+    svg: () => exportSVG(),
+    hide: ['[onclick="exportSVG()"]']
+  });
+</script>
 <!-- image-lab: back to index -->
 <a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
 <style>

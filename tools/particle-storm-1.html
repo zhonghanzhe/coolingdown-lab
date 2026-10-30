@@ -511,6 +511,13 @@
 
     </script>
 
+<script src="../lab-export.js"></script>
+<script>
+  // COOLINGDOWN LAB 统一导出
+  LabExport.setup({
+    name: 'particle-storm', image: LabExport.three(() => renderer, () => scene, () => camera), video: { source: () => renderer.domElement }, hide: ['.export-panel', '.rec-panel']
+  });
+</script>
 <!-- image-lab: back to index -->
 <a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
 <style>

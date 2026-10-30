@@ -215,9 +215,11 @@
 
             // 设置画布大小 (限制最大宽度以保证性能)
             const maxW = 800;
+            const S = window.__labS || 1; // LAB 导出：高清倍数
             let w = sourceImg.width;
             let h = sourceImg.height;
             if (w > maxW) { h = Math.round(h * (maxW / w)); w = maxW; }
+            w = Math.round(w * S); h = Math.round(h * S);
             canvas.width = w; canvas.height = h;
             bufferCanvas.width = w; bufferCanvas.height = h;
 
@@ -236,10 +238,10 @@
             // --- Step 2: 应用抖动 (Wobble) ---
             // 通过切片偏移来实现
             ctx.clearRect(0,0,w,h);
-            const sliceHeight = 4; // 切片高度
+            const sliceHeight = 4 * S; // 切片高度
             for (let y = 0; y < h; y += sliceHeight) {
                 // 计算每一行的横向偏移量 (正弦波 + 随机噪波)
-                const offsetX = Math.sin(y * 0.02 + time * 2) * wobbleAmt * 0.5 + (Math.random()-0.5) * wobbleAmt * 0.5;
+                const offsetX = (Math.sin(y / S * 0.02 + time * 2) * wobbleAmt * 0.5 + (Math.random()-0.5) * wobbleAmt * 0.5) * S;
                 // 从 buffer 复制一行到主画布，并带有偏移
                 ctx.drawImage(bufferCanvas, 
                     0, y, w, sliceHeight, // 源区域
@@ -258,13 +260,13 @@
                 bufferCtx.fillStyle = '#ff0000'; bufferCtx.fillRect(0,0,w,h);
                 bufferCtx.globalCompositeOperation = 'multiply';
                 bufferCtx.drawImage(sourceImg, 0, 0, w, h); // 得到纯红图像
-                ctx.drawImage(bufferCanvas, -shiftAmt, 0);
+                ctx.drawImage(bufferCanvas, -shiftAmt * S, 0);
 
                 // 蓝色通道漂移
                 bufferCtx.clearRect(0,0,w,h);
                 bufferCtx.fillStyle = '#0000ff'; bufferCtx.fillRect(0,0,w,h);
                 bufferCtx.drawImage(sourceImg, 0, 0, w, h); // 得到纯蓝图像
-                ctx.drawImage(bufferCanvas, shiftAmt, 0);
+                ctx.drawImage(bufferCanvas, shiftAmt * S, 0);
                 
                 ctx.globalCompositeOperation = 'source-over'; // 恢复
             }
@@ -317,7 +319,7 @@
                 // 扫描线 (每隔一行压暗)
                 if (hasScanlines) {
                     const y = Math.floor((i / 4) / w);
-                    if (y % 2 === 0) {
+                    if (Math.floor(y / S) % 2 === 0) {
                         data[i] *= 0.8; data[i+1] *= 0.8; data[i+2] *= 0.8;
                     }
                 }
@@ -361,6 +363,27 @@
         }
     </script>
 
+<script src="../lab-export.js"></script>
+<script>
+  // COOLINGDOWN LAB 统一导出
+  function vhsOSD(g, w, h) {
+    if (!ui.osd.checked) return;
+    const s = w / Math.min(sourceImg.width, 800);
+    const lines = osdTime.innerText.split('\n');
+    g.save();
+    g.fillStyle = '#00ff00'; g.shadowColor = 'rgba(0,0,0,0.5)'; g.shadowOffsetX = g.shadowOffsetY = 2 * s;
+    g.font = `${32 * s}px 'VT323', monospace`; g.textAlign = 'left'; g.fillText('▶ SP PLAY', 30 * s, 50 * s);
+    g.font = `${24 * s}px 'VT323', monospace`; g.textAlign = 'right';
+    g.fillText(lines[0] || '', w - 30 * s, h - 50 * s); g.fillText(lines[1] || '', w - 30 * s, h - 25 * s);
+    g.restore();
+  }
+  LabExport.setup({
+    name: 'vhs-o-matic', ready: () => !!sourceImg,
+    image: LabExport.animatedScale(() => canvas, [1, 2, 4], vhsOSD),
+    video: { source: () => canvas, decorate: vhsOSD },
+    hide: ['[onclick="saveImage()"]']
+  });
+</script>
 <!-- image-lab: back to index -->
 <a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
 <style>

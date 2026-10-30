@@ -122,7 +122,7 @@
             img.onload = () => {
                 // 限制尺寸以保证性能
                 let w = img.width, h = img.height;
-                const max = 1000;
+                const max = 2400; // LAB：提高工作分辨率，导出更清晰
                 if (w > max || h > max) {
                     const ratio = w / h;
                     if (w > h) { w = max; h = max / ratio; } else { h = max; w = max * ratio; }
@@ -322,6 +322,15 @@
         }
     </script>
 
+<script src="../lab-export.js"></script>
+<script>
+  // COOLINGDOWN LAB 统一导出
+  LabExport.setup({
+    name: 'omni-stretch', ready: () => !!originalImageData,
+    image: Object.assign(LabExport.pixelCanvas(() => canvas), { note: '“像素放大”用最近邻插值，像素边缘保持锐利。PNG 无损，适合继续在 PS / AI 里编辑。' }),
+    hide: ['[onclick="downloadImage()"]']
+  });
+</script>
 <!-- image-lab: back to index -->
 <a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
 <style>

@@ -154,7 +154,7 @@
                     // 限制最大宽度，防止高阶算法卡死浏览器
                     let w = img.width;
                     let h = img.height;
-                    const maxW = 1000; 
+                    const maxW = 2400; // LAB：提高工作分辨率，导出更清晰
                     if (w > maxW) {
                         h = h * (maxW / w);
                         w = maxW;
@@ -349,6 +349,15 @@
         }
     </script>
 
+<script src="../lab-export.js"></script>
+<script>
+  // COOLINGDOWN LAB 统一导出
+  LabExport.setup({
+    name: 'cyber-art-pro', ready: () => !!originalImage,
+    image: Object.assign(LabExport.pixelCanvas(() => canvas), { note: '“像素放大”用最近邻插值，像素边缘保持锐利。PNG 无损，适合继续在 PS / AI 里编辑。' }),
+    hide: ['[onclick="downloadImage()"]']
+  });
+</script>
 <!-- image-lab: back to index -->
 <a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
 <style>

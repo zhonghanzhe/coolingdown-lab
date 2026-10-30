@@ -519,6 +519,16 @@
         }
     </script>
 
+<script src="../lab-export.js"></script>
+<script>
+  // COOLINGDOWN LAB 统一导出
+  LabExport.setup({
+    name: 'ascii-forge', ready: () => !!sourceImage,
+    image: Object.assign(LabExport.fromSelect('jpgSize', () => exportJPG()), { default: '4' }),
+    svg: () => exportSVG(),
+    hide: [() => { const e = document.querySelector('#jpgSize'); return e && e.closest('.control-group'); }, '[onclick="exportSVG()"]']
+  });
+</script>
 <!-- image-lab: back to index -->
 <a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
 <style>

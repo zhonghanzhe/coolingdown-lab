@@ -292,7 +292,7 @@
             const w = density;
             const h = Math.floor(sourceImg.height * scale * 0.55); 
 
-            const renderScale = 12; 
+            const renderScale = 12 * (window.__labS || 1); // LAB 导出：高清倍数
             displayCanvas.width = w * renderScale * 0.6; 
             displayCanvas.height = h * renderScale; 
             
@@ -426,6 +426,16 @@
         }
     </script>
 
+<script src="../lab-export.js"></script>
+<script>
+  // COOLINGDOWN LAB 统一导出
+  LabExport.setup({
+    name: 'ascii-live', ready: () => !!sourceImg,
+    image: LabExport.animatedScale(() => displayCanvas, [1, 2, 4]),
+    video: { source: () => displayCanvas },
+    hide: ['[onclick="saveSnapshot()"]', '.rec-box']
+  });
+</script>
 <!-- image-lab: back to index -->
 <a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
 <style>

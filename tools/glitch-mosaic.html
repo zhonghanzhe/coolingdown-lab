@@ -242,6 +242,15 @@
         }
     </script>
 
+<script src="../lab-export.js"></script>
+<script>
+  // COOLINGDOWN LAB 统一导出
+  LabExport.setup({
+    name: 'glitch-mosaic', ready: () => !!originalImage,
+    image: Object.assign(LabExport.pixelCanvas(() => canvas), { note: '“像素放大”用最近邻插值，像素边缘保持锐利。PNG 无损，适合继续在 PS / AI 里编辑。' }),
+    hide: ['[onclick="downloadImage()"]']
+  });
+</script>
 <!-- image-lab: back to index -->
 <a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
 <style>

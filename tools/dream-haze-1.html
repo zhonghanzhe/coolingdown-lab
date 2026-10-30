@@ -248,11 +248,11 @@
 
             // 2. 应用 CSS 滤镜 (模糊 + 调色)
             // Canvas 的 filter 属性可以非常高效地处理模糊和颜色
-            ctx.filter = `blur(${blurAmount}px) saturate(${satAmount}%) contrast(${conAmount}%)`;
+            ctx.filter = `blur(${blurAmount * (window.__labS || 1)}px) saturate(${satAmount}%) contrast(${conAmount}%)`;
             
             // 3. 绘制图片 (这一步会带有模糊效果)
             // 为了防止边缘模糊变透明，我们将图片稍微放大一点绘制 (clamping)
-            const pad = parseInt(blurAmount) * 2;
+            const pad = parseInt(blurAmount) * 2 * (window.__labS || 1);
             ctx.drawImage(originalImg, -pad, -pad, w + pad*2, h + pad*2);
             
             ctx.filter = 'none'; // 重置滤镜，否则噪点也会被模糊
@@ -308,6 +308,22 @@
         }
     </script>
 
+<script src="../lab-export.js"></script>
+<script>
+  // COOLINGDOWN LAB 统一导出
+  LabExport.setup({
+    name: 'dream-haze', ready: () => !!originalImg,
+    image: { default: 2, sizes: [{value: 1, label: '1x (预览)'}, {value: 2, label: '2x'}, {value: 4, label: '4x'}],
+      render: async f => {
+        const W = canvas.width, H = canvas.height;
+        window.__labS = f; canvas.width = W * f; canvas.height = H * f; render();
+        const out = LabExport.copyCanvas(canvas);
+        window.__labS = 1; canvas.width = W; canvas.height = H; render();
+        return out;
+      } },
+    hide: ['[onclick="downloadImage()"]']
+  });
+</script>
 <!-- image-lab: back to index -->
 <a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
 <style>
