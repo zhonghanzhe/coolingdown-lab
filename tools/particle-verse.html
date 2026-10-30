@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PARTICLE-VERSE: 空间粒子重构</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        :root {
+            --bg: #000000;
+            --panel: rgba(20, 20, 20, 0.8);
+            --text: #e0e0e0;
+            --accent: #00d2ff;
+        }
+        body {
+            margin: 0; overflow: hidden; background: var(--bg); color: var(--text);
+            font-family: 'Segoe UI', sans-serif;
+        }
+        
+        /* 悬浮控制台 */
+        .controls {
+            position: absolute; top: 20px; right: 20px; width: 320px;
+            background: var(--panel); backdrop-filter: blur(10px);
+            padding: 20px; border-radius: 12px; border: 1px solid #333;
+            display: flex; flex-direction: column; gap: 15px; z-index: 100;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+        }
+
+        h1 { margin: 0; font-size: 1.2rem; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; }
+        
+        .control-group { border-top: 1px solid #333; padding-top: 15px; }
+        .control-group h3 { font-size: 0.8rem; margin: 0 0 10px 0; color: #888; text-transform: uppercase; }
+
+        label { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 5px; color: #ccc; }
+        input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+        
+        select, .btn {
+            width: 100%; padding: 10px; background: #111; border: 1px solid #444; color: #fff;
+            border-radius: 6px; cursor: pointer; font-weight: bold; text-align: center;
+            transition: 0.2s; box-sizing: border-box;
+        }
+        .btn-load { background: var(--accent); color: #000; border: none; }
+        .btn-load:hover { box-shadow: 0 0 15px var(--accent); }
+        .btn-shot { border-color: #fff; background: transparent; }
+        .btn-shot:hover { background: #fff; color: #000; }
+        
+        input[type="file"] { display: none; }
+        
+        #canvas-container { width: 100vw; height: 100vh; }
+        .loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: var(--accent); font-size: 1.5rem; pointer-events: none; display: none;
+            text-shadow: 0 0 10px var(--accent);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <h1>Particle Verse</h1>
+        
+        <label class="btn btn-load">
+            📂 载入图片 (UPLOAD)
+            <input type="file" id="uploadInput" accept="image/*">
+        </label>
+
+        <div class="control-group">
+            <h3>🌌 空间模式 (Mode)</h3>
+            <select id="modeSelect">
+                <option value="nebula">☁️ Nebula (柔光云雾/类高斯)</option>
+                <option value="stardust">✨ Stardust (锐利星尘)</option>
+                <option value="matrix">🔮 Matrix (全息矩阵)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <h3>🎛️ 物理参数 (Physics)</h3>
+            
+            <label>粒子大小 (Size) <span id="v-size">1.0</span></label>
+            <input type="range" id="pSize" min="0.1" max="5.0" step="0.1" value="1.0">
+            
+            <label>3D 深度 (Depth Z) <span id="v-depth">100</span></label>
+            <input type="range" id="pDepth" min="0" max="300" value="100">
+            
+            <label>空间离散 (Explosion) <span id="v-disp">0</span></label>
+            <input type="range" id="pDisp" min="0" max="200" value="0">
+            
+            <label>采样密度 (Density) <span id="v-dens">High</span></label>
+            <input type="range" id="pDens" min="1" max="4" step="1" value="2">
+            <div style="font-size:0.7rem; color:#666;">* 密度改变需重新上传图片生效</div>
+        </div>
+
+        <button class="btn btn-shot" onclick="saveImage()">📷 拍摄快照 (Snapshot)</button>
+    </div>
+
+    <div id="loading">✨ 解析粒子数据中...</div>
+    <div id="canvas-container"></div>
+
+    <script>
+        // ==========================================
+        // 1. 初始化 Three.js 场景
+        // ==========================================
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050505);
+        scene.fog = new THREE.FogExp2(0x050505, 0.001); // 黑色雾气增加深邃感
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 3000);
+        camera.position.z = 800;
+
+        const renderer = new THREE.WebGLRenderer({ preserveDrawingBuffer: true, antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.5;
+
+        // ==========================================
+        // 2. 纹理生成器 (程序化生成粒子贴图)
+        // ==========================================
+        function createParticleTexture(type) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 32; canvas.height = 32;
+            const ctx = canvas.getContext('2d');
+            const center = 16;
+
+            if (type === 'nebula') {
+                // 柔和的光晕 (Gaussian Splat 风格)
+                const grad = ctx.createRadialGradient(center, center, 0, center, center, 16);
+                grad.addColorStop(0, 'rgba(255,255,255,1)');
+                grad.addColorStop(0.4, 'rgba(255,255,255,0.5)');
+                grad.addColorStop(1, 'rgba(255,255,255,0)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, 32, 32);
+            } else if (type === 'stardust') {
+                // 锐利的亮点
+                const grad = ctx.createRadialGradient(center, center, 0, center, center, 16);
+                grad.addColorStop(0, 'rgba(255,255,255,1)');
+                grad.addColorStop(0.2, 'rgba(255,255,255,0.8)');
+                grad.addColorStop(0.25, 'rgba(255,255,255,0)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, 32, 32);
+            } else {
+                // 方块 (Matrix)
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(8, 8, 16, 16);
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }
+
+        const textures = {
+            nebula: createParticleTexture('nebula'),
+            stardust: createParticleTexture('stardust'),
+            matrix: createParticleTexture('matrix')
+        };
+
+        // ==========================================
+        // 3. 核心：图片转粒子系统
+        // ==========================================
+        let particleSystem, particleGeometry;
+        let originalPositions = []; // 存储原始坐标以便复位
+        let particleColors = [];    // 存储颜色
+
+        const ui = {
+            size: document.getElementById('pSize'),
+            depth: document.getElementById('pDepth'),
+            disp: document.getElementById('pDisp'),
+            dens: document.getElementById('pDens'),
+            mode: document.getElementById('modeSelect')
+        };
+
+        // 监听滑块
+        ui.size.addEventListener('input', e => {
+            document.getElementById('v-size').innerText = e.target.value;
+            if(particleSystem) particleSystem.material.size = parseFloat(e.target.value) * (ui.mode.value === 'nebula' ? 10 : 3);
+        });
+        ui.depth.addEventListener('input', e => {
+            document.getElementById('v-depth').innerText = e.target.value;
+            updateParticles();
+        });
+        ui.disp.addEventListener('input', e => {
+            document.getElementById('v-disp').innerText = e.target.value;
+            updateParticles();
+        });
+        ui.mode.addEventListener('change', updateMaterial);
+
+        // 图片处理
+        const fileInput = document.getElementById('uploadInput');
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+            
+            document.getElementById('loading').style.display = 'block';
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = function() {
+                    createParticlesFromImage(img);
+                    document.getElementById('loading').style.display = 'none';
+                };
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function createParticlesFromImage(image) {
+            if (particleSystem) scene.remove(particleSystem);
+
+            // 1. 在 Canvas 上绘制图片以获取像素数据
+            const canvas = document.createElement('canvas');
+            // 根据密度滑块决定分辨率
+            // 4=原图(限制最大1000), 1=低清(限制200)
+            const maxRes = [200, 400, 600, 800, 1000][parseInt(ui.dens.value)]; 
+            
+            let w = image.width;
+            let h = image.height;
+            
+            // 保持比例缩放
+            if (w > maxRes) {
+                h = Math.round(h * (maxRes / w));
+                w = maxRes;
+            }
+            
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(image, 0, 0, w, h);
+            const imgData = ctx.getImageData(0, 0, w, h).data;
+
+            // 2. 创建粒子几何体
+            const geometry = new THREE.BufferGeometry();
+            const positions = [];
+            const colors = [];
+            const sizes = [];
+            originalPositions = []; // 清空缓存
+            
+            // 3. 遍历像素
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const i = (y * w + x) * 4;
+                    const r = imgData[i] / 255;
+                    const g = imgData[i+1] / 255;
+                    const b = imgData[i+2] / 255;
+                    const a = imgData[i+3];
+
+                    // 只处理不透明像素，且跳过纯黑像素(可选)
+                    if (a > 50 && (r+g+b) > 0.1) {
+                        // 居中坐标
+                        const px = x - w / 2;
+                        const py = -(y - h / 2); // Y轴反转
+                        const pz = 0; // 初始Z为0
+
+                        // 记录原始数据
+                        // 我们把亮度 (Brightness) 存入一个自定义属性，方便后续 Z 轴计算
+                        const brightness = (r + g + b) / 3;
+                        
+                        positions.push(px, py, pz);
+                        colors.push(r, g, b);
+                        
+                        // 存储额外信息: [x, y, brightness]
+                        originalPositions.push({x: px, y: py, br: brightness});
+                    }
+                }
+            }
+
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            
+            particleGeometry = geometry;
+
+            // 4. 创建材质 (默认 Nebula)
+            updateMaterial();
+        }
+
+        function updateMaterial() {
+            if (!particleGeometry) return;
+            
+            const mode = ui.mode.value;
+            const baseSize = parseFloat(ui.size.value);
+            let materialSize = baseSize;
+            let blending = THREE.AdditiveBlending;
+            let depthWrite = false;
+            let opacity = 1.0;
+
+            if (mode === 'nebula') {
+                materialSize = baseSize * 10; // 云雾需要大粒子
+                opacity = 0.8;
+            } else if (mode === 'stardust') {
+                materialSize = baseSize * 2;
+            } else {
+                materialSize = baseSize * 3;
+                blending = THREE.NormalBlending; // 矩阵模式不需要强叠加
+            }
+
+            const material = new THREE.PointsMaterial({
+                size: materialSize,
+                map: textures[mode],
+                vertexColors: true,
+                blending: blending,
+                depthWrite: false, // 关键：关闭深度写入以实现透明叠加
+                transparent: true,
+                opacity: opacity
+            });
+
+            if (particleSystem) scene.remove(particleSystem);
+            particleSystem = new THREE.Points(particleGeometry, material);
+            scene.add(particleSystem);
+            
+            // 更新粒子位置
+            updateParticles();
+        }
+
+        // ==========================================
+        // 4. 粒子位置更新逻辑 (深度与离散)
+        // ==========================================
+        function updateParticles() {
+            if (!particleSystem || originalPositions.length === 0) return;
+
+            const positions = particleSystem.geometry.attributes.position.array;
+            const depthFactor = parseInt(ui.depth.value);
+            const dispFactor = parseInt(ui.disp.value);
+
+            for (let i = 0; i < originalPositions.length; i++) {
+                const orig = originalPositions[i];
+                const idx = i * 3;
+
+                // 1. 计算深度 (Z轴)
+                // 亮度越高，Z轴越凸起 (靠近摄像机)
+                let z = orig.br * depthFactor;
+
+                // 2. 计算离散 (Explosion)
+                // 基于噪点或者随机方向让粒子飞散
+                // 这里用简单的中心扩散模拟
+                // 使用 Math.sin(i) 作为伪随机数
+                const randomX = Math.sin(i * 12.9898) * dispFactor; 
+                const randomY = Math.cos(i * 78.233) * dispFactor;
+                const randomZ = Math.sin(i * 43.123) * dispFactor * 2;
+
+                positions[idx] = orig.x + randomX;     // X
+                positions[idx+1] = orig.y + randomY;   // Y
+                positions[idx+2] = z + randomZ;        // Z
+            }
+
+            particleSystem.geometry.attributes.position.needsUpdate = true;
+        }
+
+        // ==========================================
+        // 5. 渲染循环
+        // ==========================================
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // 窗口自适应
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // 截图功能
+        function saveImage() {
+            renderer.render(scene, camera); // 强制渲染一帧
+            const link = document.createElement('a');
+            link.download = 'particle-verse.png';
+            link.href = renderer.domElement.toDataURL('image/png');
+            link.click();
+        }
+
+    </script>
+
+<!-- image-lab: back to index -->
+<a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
+<style>
+#__lab_back{position:fixed;right:14px;bottom:14px;z-index:2147483647;
+  font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
+  padding:8px 11px;border-radius:999px;text-decoration:none;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}
+#__lab_back:hover{opacity:1}
+</style>
+</body>
+</html>

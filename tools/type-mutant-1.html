@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TYPE-MUTANT // 字体变异实验室 (v1.2 修复版)</title>
+    <style>
+        :root {
+            --bg: #0d0d0d;
+            --panel: #1a1a1a;
+            --text: #eee;
+            --accent: #ff0055;
+            --border: #333;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 左侧控制面板 */
+        .controls {
+            width: 340px;
+            background: var(--panel);
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            flex-shrink: 0; /* 禁止侧边栏被压缩 */
+            z-index: 10;
+            box-shadow: 5px 0 20px rgba(0,0,0,0.5);
+        }
+
+        h1 {
+            margin: 0 0 10px 0;
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--accent);
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 10px;
+        }
+
+        .control-group {
+            background: #222;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .control-group h3 {
+            margin: 0 0 10px 0;
+            font-size: 0.85rem;
+            color: #888;
+            text-transform: uppercase;
+        }
+
+        label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            margin-bottom: 5px;
+            color: #ccc;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent);
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+
+        input[type="text"], input[type="color"] {
+            width: 100%;
+            background: #111;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 8px;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        
+        input[type="text"] {
+            font-size: 1.5rem;
+            text-align: center;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        button {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: 0.2s;
+            margin-top: 10px;
+        }
+        button:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        /* 右侧展示区 */
+        .preview-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            padding: 40px;
+            gap: 40px;
+            align-items: center;
+        }
+
+        /* === 关键修复部分 === 
+           强制设定尺寸，禁止 flex 压缩 
+        */
+        .main-preview {
+            position: relative;
+            background: #fff;
+            padding: 20px;
+            border-radius: 4px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* 液态融合滤镜 */
+            filter: contrast(15); 
+            background-color: white;
+            overflow: hidden;
+            
+            /* 强制尺寸锁定 */
+            width: 400px;
+            height: 400px;
+            min-width: 400px;  /* 谁也别想压扁我 */
+            min-height: 400px; /* 谁也别想压扁我 */
+            flex-shrink: 0;    /* 禁止在 Flex 布局中收缩 */
+        }
+        
+        .main-preview canvas {
+            filter: blur(8px);
+            display: block; /* 防止内联元素幽灵间距 */
+        }
+
+        .section-title {
+            width: 100%;
+            max-width: 1000px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+            font-size: 0.9rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            flex-shrink: 0; /* 标题也不许被压扁 */
+        }
+
+        /* 字符集网格 */
+        .charset-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 15px;
+            width: 100%;
+            max-width: 1000px;
+            padding-bottom: 50px; /* 底部留白 */
+        }
+
+        .char-card {
+            background: #fff;
+            aspect-ratio: 1;
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            filter: contrast(15); 
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .char-card canvas {
+            filter: blur(5px);
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <h1>Type Mutant v1.2</h1>
+        
+        <div class="control-group">
+            <h3>🔤 基础输入 (Input)</h3>
+            <label>测试字母 (Char)</label>
+            <input type="text" id="inputChar" value="M" maxlength="1">
+            <label>字体大小 (Zoom) <span id="v-zoom">50%</span></label>
+            <input type="range" id="fontSize" min="30" max="80" value="50">
+        </div>
+
+        <div class="control-group">
+            <h3>🦠 变异参数 (Mutation)</h3>
+            
+            <label>粒子大小 (Cell Size) <span id="v-size">14</span></label>
+            <input type="range" id="pSize" min="5" max="40" value="14">
+            
+            <label>不规则度 (Chaos) <span id="v-chaos">0.5</span></label>
+            <input type="range" id="pChaos" min="0" max="5" step="0.1" value="0.5">
+            
+            <label>液态流动 (Flow) <span id="v-flow">0</span></label>
+            <input type="range" id="pFlow" min="0" max="20" step="0.5" value="0">
+            
+            <label>密度/采样率 (Density) <span id="v-dens">8</span></label>
+            <input type="range" id="pDens" min="4" max="20" value="8">
+        </div>
+
+        <div class="control-group">
+            <h3>🎨 样式 (Style)</h3>
+            <label>墨水颜色 (Color)</label>
+            <input type="color" id="inkColor" value="#ff0055">
+            <label>背景模式</label>
+            <select id="bgMode" style="width:100%; padding:5px; background:#111; color:#fff; border:1px solid #444;">
+                <option value="white">白底 (适合融合)</option>
+                <option value="black">黑底 (适合荧光)</option>
+            </select>
+        </div>
+
+        <button onclick="generateAll()">⚡ 生成全套字符集 (A-Z, 0-9)</button>
+    </div>
+
+    <div class="preview-area">
+        <div class="section-title">Design Lab // 主设计台</div>
+        
+        <div class="main-preview" id="mainCard">
+            <canvas id="mainCanvas"></canvas>
+        </div>
+
+        <div class="section-title">Character Set // 全套生成结果</div>
+        <div class="charset-grid" id="grid">
+            </div>
+    </div>
+
+    <script>
+        // 配置
+        const config = {
+            char: 'M',
+            zoom: 0.5,     // 字体大小比例
+            size: 14,      // 粒子半径
+            chaos: 0.5,    // 随机偏移
+            flow: 0,       // 波浪扭曲
+            density: 8,    // 采样间隔
+            color: '#ff0055',
+            bg: 'white'
+        };
+
+        // DOM 元素
+        const mainCanvas = document.getElementById('mainCanvas');
+        const mainCtx = mainCanvas.getContext('2d');
+        const grid = document.getElementById('grid');
+        
+        // 绑定 UI
+        const inputs = {
+            char: document.getElementById('inputChar'),
+            zoom: document.getElementById('fontSize'),
+            size: document.getElementById('pSize'),
+            chaos: document.getElementById('pChaos'),
+            flow: document.getElementById('pFlow'),
+            dens: document.getElementById('pDens'),
+            color: document.getElementById('inkColor'),
+            bgMode: document.getElementById('bgMode')
+        };
+
+        // 事件监听
+        Object.keys(inputs).forEach(k => {
+            inputs[k].addEventListener('input', (e) => {
+                let val = e.target.value;
+                if(k === 'size' || k === 'dens' || k === 'zoom') val = parseInt(val);
+                if(k === 'chaos' || k === 'flow') val = parseFloat(val);
+                
+                // 特殊处理 Zoom
+                if(k === 'zoom') config.zoom = val / 100;
+                else config[k] = val;
+                
+                // 更新数值显示
+                if(document.getElementById(`v-${k}`)) {
+                    const displayVal = k === 'zoom' ? val + '%' : val;
+                    document.getElementById(`v-${k}`).innerText = displayVal;
+                }
+
+                updateMainPreview();
+            });
+        });
+
+        inputs.char.addEventListener('input', (e) => {
+            config.char = e.target.value.toUpperCase() || 'A';
+            updateMainPreview();
+        });
+
+        // ----------------------------------------------------
+        // 核心采样器
+        // ----------------------------------------------------
+        function sampleFont(char, width, height) {
+            const osC = document.createElement('canvas');
+            osC.width = width;
+            osC.height = height;
+            const ctx = osC.getContext('2d');
+
+            // 1. 绘制基础字体
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, width, height); 
+            
+            ctx.fillStyle = '#fff'; 
+            const fontSize = width * config.zoom; 
+            ctx.font = `bold ${fontSize}px Arial, Helvetica, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // 垂直居中修正
+            ctx.fillText(char, width / 2, height / 2 + (height * 0.05));
+
+            // 2. 读取像素
+            const idata = ctx.getImageData(0, 0, width, height);
+            const data = idata.data;
+            const particles = [];
+            const step = Math.max(1, config.density); 
+            
+            for (let y = 0; y < height; y += step) {
+                for (let x = 0; x < width; x += step) {
+                    const i = (y * width + x) * 4;
+                    if (data[i] > 128) {
+                        particles.push({ x: x, y: y });
+                    }
+                }
+            }
+            return particles;
+        }
+
+        function renderParticles(ctx, particles, width, height, scale = 1) {
+            ctx.clearRect(0, 0, width, height);
+            
+            // 设置背景
+            ctx.fillStyle = config.bg === 'white' ? '#fff' : '#000';
+            ctx.fillRect(0, 0, width, height);
+            
+            ctx.fillStyle = config.color;
+
+            particles.forEach(p => {
+                // 变形逻辑
+                const noiseX = Math.sin(p.y * 0.1) + Math.cos(p.x * 0.1); 
+                const noiseY = Math.cos(p.y * 0.1) - Math.sin(p.x * 0.1);
+                
+                let dx = (noiseX * config.chaos * 10);
+                let dy = (noiseY * config.chaos * 10);
+
+                if (config.flow > 0) {
+                    dx += Math.sin(p.y * 0.05) * config.flow * 2;
+                    dy += Math.cos(p.x * 0.05) * config.flow * 2;
+                }
+
+                ctx.beginPath();
+                ctx.arc(p.x + dx, p.y + dy, config.size * scale, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        // ----------------------------------------------------
+        // 主预览更新
+        // ----------------------------------------------------
+        function updateMainPreview() {
+            const w = 400;
+            const h = 400;
+            mainCanvas.width = w;
+            mainCanvas.height = h;
+            
+            const card = document.getElementById('mainCard');
+            if (config.bg === 'black') {
+                card.style.backgroundColor = 'black';
+                mainCanvas.style.filter = 'blur(8px)';
+            } else {
+                card.style.backgroundColor = 'white';
+                mainCanvas.style.filter = 'blur(8px)';
+            }
+
+            const particles = sampleFont(config.char, w, h);
+            renderParticles(mainCtx, particles, w, h, 1.0);
+        }
+
+        // ----------------------------------------------------
+        // 批量生成
+        // ----------------------------------------------------
+        function generateAll() {
+            grid.innerHTML = '';
+            
+            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split('');
+            const cardSize = 150; 
+            const scale = cardSize / 400; 
+
+            chars.forEach(char => {
+                const card = document.createElement('div');
+                card.className = 'char-card';
+                card.style.backgroundColor = config.bg === 'white' ? 'white' : 'black';
+
+                const cvs = document.createElement('canvas');
+                cvs.width = cardSize;
+                cvs.height = cardSize;
+                const ctx = cvs.getContext('2d');
+                
+                const bigParticles = sampleFont(char, 400, 400);
+                
+                ctx.fillStyle = config.bg === 'white' ? '#fff' : '#000';
+                ctx.fillRect(0, 0, cardSize, cardSize);
+                ctx.fillStyle = config.color;
+
+                bigParticles.forEach(p => {
+                    const sx = p.x * scale;
+                    const sy = p.y * scale;
+
+                    const noiseX = Math.sin(p.y * 0.1) + Math.cos(p.x * 0.1); 
+                    const noiseY = Math.cos(p.y * 0.1) - Math.sin(p.x * 0.1);
+                    
+                    let dx = (noiseX * config.chaos * 10) * scale;
+                    let dy = (noiseY * config.chaos * 10) * scale;
+
+                    if (config.flow > 0) {
+                        dx += Math.sin(p.y * 0.05) * config.flow * 2 * scale;
+                        dy += Math.cos(p.x * 0.05) * config.flow * 2 * scale;
+                    }
+
+                    ctx.beginPath();
+                    ctx.arc(sx + dx, sy + dy, config.size * scale, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+
+                card.appendChild(cvs);
+                grid.appendChild(card);
+            });
+        }
+
+        updateMainPreview();
+        setTimeout(generateAll, 500);
+
+    </script>
+
+<!-- image-lab: back to index -->
+<a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
+<style>
+#__lab_back{position:fixed;right:14px;bottom:14px;z-index:2147483647;
+  font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
+  padding:8px 11px;border-radius:999px;text-decoration:none;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}
+#__lab_back:hover{opacity:1}
+</style>
+</body>
+</html>

@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Haze - Pro Export</title>
+    <style>
+        :root {
+            --bg: #0a0a0a; --panel: #141414; --text: #e0e0e0; --accent: #ff0055; --svg-btn: #00ffcc;
+        }
+        body {
+            font-family: system-ui, sans-serif; background-color: var(--bg); color: var(--text);
+            display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px;
+        }
+        h1 {
+            font-weight: 800; letter-spacing: -1px; margin-bottom: 20px;
+            background: linear-gradient(90deg, #fff, #ff0055, #6600ff);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .container { width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 20px; }
+        .canvas-box {
+            background: #000; border: 1px solid #333; padding: 20px; 
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; overflow: hidden;
+            position: relative;
+        }
+        canvas { max-width: 100%; height: auto; display: block; }
+        .controls {
+            background: var(--panel); padding: 25px; border-radius: 12px;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px; border: 1px solid #333;
+        }
+        .control-group { display: flex; flex-direction: column; gap: 10px; }
+        label { font-size: 0.85rem; font-weight: bold; color: #888; text-transform: uppercase; display: flex; justify-content: space-between; }
+        input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+        .buttons { grid-column: 1 / -1; display: flex; gap: 15px; margin-top: 10px; flex-wrap: wrap; align-items: center;}
+        
+        button, .file-upload, select {
+            padding: 12px 20px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.9rem; transition: transform 0.2s;
+            height: 45px; box-sizing: border-box;
+        }
+        .btn-upload { background: #333; color: white; display: inline-flex; align-items: center; justify-content: center;}
+        .btn-gala { background: var(--accent); color: white; box-shadow: 0 0 20px rgba(255, 0, 85, 0.4); }
+        .btn-save { background: #fff; color: #000; }
+        .btn-svg { background: transparent; border: 1px solid var(--svg-btn); color: var(--svg-btn); }
+        .btn-svg:hover { background: var(--svg-btn); color: #000; box-shadow: 0 0 20px rgba(0, 255, 204, 0.4); }
+        
+        /* 尺寸选择器样式 */
+        select {
+            background: #222; color: #fff; border: 1px solid #444; outline: none;
+        }
+        
+        button:hover, .file-upload:hover { transform: translateY(-2px); opacity: 0.9; }
+        input[type="file"] { display: none; }
+        
+        /* 加载遮罩 */
+        #loadingOverlay {
+            position: absolute; top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.8); display: none; justify-content: center; align-items: center;
+            color: var(--accent); font-weight: bold; z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>DREAM HAZE // PRO EXPORT</h1>
+
+    <div class="container">
+        <div class="canvas-box">
+            <div id="loadingOverlay">正在渲染高清大图...</div>
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>Blur Intensity (模糊) <span id="val-blur">60px</span></label>
+                <input type="range" id="blur" min="0" max="150" value="60">
+            </div>
+            <div class="control-group">
+                <label>Grain / Noise (颗粒) <span id="val-noise">35</span></label>
+                <input type="range" id="noise" min="0" max="100" value="35">
+            </div>
+            <div class="control-group">
+                <label>Saturation (色彩) <span id="val-sat">140%</span></label>
+                <input type="range" id="sat" min="0" max="300" value="140">
+            </div>
+            <div class="control-group">
+                <label>Contrast (对比度) <span id="val-con">110%</span></label>
+                <input type="range" id="con" min="50" max="200" value="110">
+            </div>
+
+            <div class="buttons">
+                <label class="btn-upload file-upload">
+                    📂 上传图片
+                    <input type="file" id="upload" accept="image/*">
+                </label>
+                
+                <select id="exportSize">
+                    <option value="current">当前预览尺寸</option>
+                    <option value="original">原始图片尺寸</option>
+                    <option value="1920">1080p 高清 (宽1920)</option>
+                    <option value="3840">4K 超清 (宽3840)</option>
+                </select>
+
+                <button class="btn-save" onclick="downloadImage()">💾 导出 JPG</button>
+                <button class="btn-svg" onclick="exportSafeSVG()">⬇️ 导出 SVG</button>
+                <button class="btn-gala" onclick="applyGalaPreset()">✨ GALA 预设</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        
+        const inputs = {
+            blur: document.getElementById('blur'),
+            noise: document.getElementById('noise'),
+            sat: document.getElementById('sat'),
+            con: document.getElementById('con')
+        };
+        
+        const labels = {
+            blur: document.getElementById('val-blur'),
+            noise: document.getElementById('val-noise'),
+            sat: document.getElementById('val-sat'),
+            con: document.getElementById('val-con')
+        };
+
+        let originalImg = null;
+
+        // 初始化
+        canvas.width = 800; canvas.height = 600;
+        ctx.fillStyle = '#111'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#333'; ctx.font = '20px sans-serif'; ctx.textAlign = 'center'; ctx.fillText("请上传图片以开始", 400, 300);
+
+        Object.keys(inputs).forEach(key => {
+            inputs[key].addEventListener('input', (e) => {
+                labels[key].innerText = key === 'blur' || key === 'noise' ? e.target.value : e.target.value + '%';
+                requestAnimationFrame(renderPreview);
+            });
+        });
+
+        document.getElementById('upload').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    // 预览限制最大1200以保证流畅
+                    let w = img.width; let h = img.height;
+                    const max = 1200;
+                    if (w > max) { h = h * (max / w); w = max; }
+                    canvas.width = w; canvas.height = h;
+                    originalImg = img; // 保存原始高清图对象
+                    applyGalaPreset();
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // 预览渲染 (快速)
+        function renderPreview() {
+            if (!originalImg) return;
+            const w = canvas.width; const h = canvas.height;
+            // 计算当前预览的缩放比例，以便在导出时修正
+            const scale = w / originalImg.width; 
+            renderToContext(ctx, w, h, scale);
+        }
+
+        // 通用渲染逻辑 (核心)
+        // ctx: 目标画布上下文
+        // w, h: 目标尺寸
+        // scale: 目标尺寸相对于原图的比例 (用于修正模糊度)
+        function renderToContext(targetCtx, w, h, scale) {
+            // 获取参数
+            const blurBase = parseInt(inputs.blur.value);
+            const sat = inputs.sat.value;
+            const con = inputs.con.value;
+            const noise = parseInt(inputs.noise.value);
+
+            // 关键：模糊程度必须随尺寸缩放！
+            // 如果预览(1000px)模糊是10，导出(4000px)模糊必须是40，否则看起来变清晰了
+            // 这里我们以“相对于当前预览画布”的比例来计算
+            // 或者更简单的：基于目标宽度与预览宽度的比例
+            
+            // 修正算法：
+            // blurBase 是用户在当前 canvas.width 下调节的值
+            // 目标渲染 blur = blurBase * (targetWidth / canvas.width)
+            const relativeScale = w / canvas.width;
+            const finalBlur = blurBase * relativeScale;
+
+            targetCtx.clearRect(0, 0, w, h);
+            targetCtx.filter = `blur(${finalBlur}px) saturate(${sat}%) contrast(${con}%)`;
+            
+            const pad = Math.ceil(finalBlur * 2);
+            targetCtx.drawImage(originalImg, -pad, -pad, w + pad*2, h + pad*2);
+            targetCtx.filter = 'none';
+
+            if (noise > 0) {
+                const imgData = targetCtx.getImageData(0, 0, w, h);
+                const data = imgData.data;
+                // 噪点不需要缩放，因为我们希望高分辨率下噪点更细腻（像胶片颗粒）
+                // 如果想要噪点也变大，那比较复杂，这里保持细腻颗粒感
+                for (let i = 0; i < data.length; i += 4) {
+                    const n = (Math.random() - 0.5) * noise * 2;
+                    data[i]+=n; data[i+1]+=n; data[i+2]+=n;
+                }
+                targetCtx.putImageData(imgData, 0, 0);
+            }
+        }
+
+        function applyGalaPreset() {
+            if(!originalImg) return;
+            inputs.blur.value = 80; inputs.sat.value = 160;
+            inputs.con.value = 110; inputs.noise.value = 40;
+            labels.blur.innerText = "80"; labels.sat.innerText = "160%";
+            labels.con.innerText = "110%"; labels.noise.innerText = "40";
+            renderPreview();
+        }
+
+        // ==========================================
+        // 新增：多尺寸导出逻辑
+        // ==========================================
+        function downloadImage() {
+            if (!originalImg) return;
+            
+            // 显示加载提示 (因为4K渲染很慢)
+            loadingOverlay.style.display = 'flex';
+            loadingOverlay.innerText = "正在渲染...";
+
+            // 使用 setTimeout 让 UI 有机会刷新出“加载中”字样
+            setTimeout(() => {
+                const sizeOption = document.getElementById('exportSize').value;
+                let targetW, targetH;
+
+                if (sizeOption === 'current') {
+                    targetW = canvas.width;
+                    targetH = canvas.height;
+                } else if (sizeOption === 'original') {
+                    targetW = originalImg.width;
+                    targetH = originalImg.height;
+                } else {
+                    // 固定宽度 (1920 或 3840)
+                    const fixedW = parseInt(sizeOption);
+                    const ratio = originalImg.width / originalImg.height;
+                    targetW = fixedW;
+                    targetH = fixedW / ratio;
+                }
+
+                // 创建离屏 Canvas
+                const offCanvas = document.createElement('canvas');
+                offCanvas.width = targetW;
+                offCanvas.height = targetH;
+                const offCtx = offCanvas.getContext('2d');
+
+                // 渲染
+                // 这里的 scale 参数其实在 renderToContext 内部通过 relativeScale 处理了
+                renderToContext(offCtx, targetW, targetH, 1);
+
+                // 下载
+                const link = document.createElement('a');
+                link.download = `dream-haze-${targetW}px.jpg`;
+                link.href = offCanvas.toDataURL('image/jpeg', 0.92); // 高质量 JPG
+                link.click();
+
+                // 隐藏加载提示
+                loadingOverlay.style.display = 'none';
+            }, 50);
+        }
+
+        // 安全版 SVG 导出 (逻辑保持不变)
+        function exportSafeSVG() {
+            if (!originalImg) return alert("请先上传图片！");
+            const tempCanvas = document.createElement('canvas');
+            let w = originalImg.width; let h = originalImg.height;
+            const safeMax = 1500; 
+            if (w > safeMax || h > safeMax) {
+                const ratio = w / h;
+                if (w > h) { w = safeMax; h = safeMax / ratio; } else { h = safeMax; w = safeMax * ratio; }
+            }
+            tempCanvas.width = w; tempCanvas.height = h;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(originalImg, 0, 0, w, h);
+            const safeBase64 = tempCanvas.toDataURL('image/jpeg', 0.85);
+
+            const blurVal = inputs.blur.value;
+            const satVal = inputs.sat.value / 100;
+            const contrastVal = inputs.con.value / 100;
+            const noiseVal = inputs.noise.value / 100;
+            const c = contrastVal; const o = 0.5 * (1 - c);
+
+            const svgContent = `
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <defs>
+    <filter id="combinedFilter" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="${blurVal / 2}" result="BLUR" />
+      <feColorMatrix in="BLUR" type="saturate" values="${satVal}" result="SAT" />
+      <feColorMatrix in="SAT" type="matrix" values="${c} 0 0 0 ${o}  0 ${c} 0 0 ${o}  0 0 ${c} 0 ${o}  0 0 0 1 0" result="COLOR_FINAL" />
+      <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" result="NOISE_RAW"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0, 0 0 0 0 0, 0 0 0 0 0, 0 0 0 ${noiseVal} 0" in="NOISE_RAW" result="NOISE_ALPHA" />
+      <feBlend mode="overlay" in="NOISE_ALPHA" in2="COLOR_FINAL" result="FINAL_IMAGE" />
+    </filter>
+  </defs>
+  <image xlink:href="${safeBase64}" width="${w}" height="${h}" filter="url(#combinedFilter)" />
+</svg>`;
+            const blob = new Blob([svgContent], {type: 'image/svg+xml'});
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.download = 'dream-haze-safe.svg';
+            link.href = url;
+            link.click();
+        }
+    </script>
+
+<!-- image-lab: back to index -->
+<a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
+<style>
+#__lab_back{position:fixed;right:14px;bottom:14px;z-index:2147483647;
+  font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
+  padding:8px 11px;border-radius:999px;text-decoration:none;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}
+#__lab_back:hover{opacity:1}
+</style>
+</body>
+</html>

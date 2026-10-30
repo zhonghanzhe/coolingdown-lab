@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VHS-O-MATIC: 复古录像机</title>
+    <style>
+        :root {
+            --bg: #111; --panel: #222; --text: #ddd;
+            --accent: #ff3300; /* 录像红 */
+            --osd: #00ff00; /* 屏幕菜单绿 */
+        }
+        body {
+            font-family: 'VT323', monospace, sans-serif; /* 尝试使用复古像素字体，如果没有则回退 */
+            background-color: var(--bg); color: var(--text);
+            margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 20px;
+            /* 模拟一点点屏幕弯曲 */
+            perspective: 1000px;
+        }
+        /* 加载复古字体 (可选) */
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        h1 {
+            font-weight: 400; letter-spacing: 2px; margin-bottom: 20px; font-size: 2.5rem;
+            color: var(--accent); text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            text-transform: uppercase;
+        }
+        .main-layout { display: flex; gap: 30px; width: 100%; max-width: 1300px; align-items: flex-start; flex-wrap: wrap; justify-content: center;}
+        
+        /* 电视机外壳 */
+        .tv-frame {
+            flex: 1; min-width: 500px; background: #000; padding: 30px;
+            border-radius: 20px; border: 5px solid #333;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8), 0 0 30px rgba(0,0,0,0.5);
+            position: relative; overflow: hidden;
+        }
+        /* 屏幕反光 */
+        .tv-frame::before {
+            content: ''; position: absolute; top:0; left:0; width:100%; height:100%;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 30%);
+            pointer-events: none; z-index: 10; border-radius: 15px;
+        }
+
+        .canvas-wrapper {
+            position: relative; border-radius: 15px; overflow: hidden;
+            /* 轻微的枕形畸变模拟 CRT */
+            /* transform: rotateX(2deg); */
+        }
+        canvas { max-width: 100%; height: auto; display: block; filter: contrast(110%) brightness(110%);}
+        
+        /* OSD 屏幕显示层 */
+        .osd-layer {
+            position: absolute; top: 20px; left: 30px; color: var(--osd);
+            font-size: 2rem; text-shadow: 2px 2px 0px rgba(0,0,0,0.5);
+            pointer-events: none; z-index: 5; font-family: 'VT323', monospace;
+            animation: blink 2s infinite;
+        }
+        .osd-time { position: absolute; bottom: 20px; right: 30px; font-size: 1.5rem; top: auto; animation: none;}
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        .controls {
+            width: 300px; background: var(--panel); padding: 25px; border: 2px solid #444;
+            display: flex; flex-direction: column; gap: 20px; border-radius: 8px;
+        }
+        
+        h3 { margin: 0 0 5px 0; font-size: 1rem; color: #888; text-transform: uppercase; letter-spacing: 1px;}
+        label { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 5px; color: #ccc; }
+        
+        /* 复古滑块风格 */
+        input[type="range"] { 
+            width: 100%; accent-color: var(--accent); cursor: pointer; height: 8px; background: #111; border: 1px solid #555;
+        }
+        
+        .btn {
+            width: 100%; padding: 12px; background: #333; border: 2px solid #555;
+            color: #ccc; font-weight: bold; text-transform: uppercase; cursor: pointer;
+            text-align: center; transition: 0.2s; box-sizing: border-box; font-family: inherit; font-size: 1.1rem;
+        }
+        .btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .btn-main { background: var(--accent); color: #fff; border: none; }
+        .btn-main:hover { background: #ff5533; }
+
+        input[type="file"] { display: none; }
+        
+        .checkbox-group { display: flex; align-items: center; gap: 10px; }
+        input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); }
+    </style>
+</head>
+<body>
+
+    <h1>VHS-O-Matic // Hi-Fi Stereo</h1>
+
+    <div class="main-layout">
+        <div class="controls">
+            <label class="btn btn-main">
+                📼 INSERT TAPE (Load Image)
+                <input type="file" id="upload" accept="image/*">
+            </label>
+
+            <div>
+                <h3>TRACKING CONTROL (磁带跟踪)</h3>
+                <label>强度 (Amount) <span id="v-trackAmt">30</span></label>
+                <input type="range" id="trackAmt" min="0" max="100" value="30">
+                <label>位置 (Position) <span id="v-trackPos">90</span></label>
+                <input type="range" id="trackPos" min="0" max="100" value="90">
+            </div>
+
+            <div>
+                <h3>SIGNAL DISTORTION (信号失真)</h3>
+                <label>色彩漂移 (RGB Shift) <span id="v-shift">5</span></label>
+                <input type="range" id="shift" min="0" max="20" value="5">
+                
+                <label>画面抖动 (Wobble) <span id="v-wobble">2</span></label>
+                <input type="range" id="wobble" min="0" max="10" value="2">
+
+                <label>整体噪点 (Static) <span id="v-noise">15</span></label>
+                <input type="range" id="noise" min="0" max="50" value="15">
+            </div>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="scanlines" checked>
+                <label for="scanlines" style="margin:0">交错扫描线 (Interlaced)</label>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="osd" checked>
+                <label for="osd" style="margin:0">屏幕字符 (Show OSD)</label>
+            </div>
+
+            <div style="border-top: 2px solid #444; padding-top: 15px;">
+                <button class="btn" onclick="saveImage()">🔴 RECORD (Save JPG)</button>
+            </div>
+        </div>
+
+        <div class="tv-frame">
+            <div class="canvas-wrapper">
+                <div id="osdText" class="osd-layer">▶ SP PLAY</div>
+                <div id="osdTime" class="osd-layer osd-time">OCT 26 1995<br>PM 08:32:15</div>
+                <canvas id="canvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="bufferCanvas" style="display: none;"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const bufferCanvas = document.getElementById('bufferCanvas');
+        const bufferCtx = bufferCanvas.getContext('2d');
+        const osdText = document.getElementById('osdText');
+        const osdTime = document.getElementById('osdTime');
+
+        let sourceImg = null;
+        let time = 0;
+        let animationId;
+
+        const ui = {
+            trackAmt: document.getElementById('trackAmt'),
+            trackPos: document.getElementById('trackPos'),
+            shift: document.getElementById('shift'),
+            wobble: document.getElementById('wobble'),
+            noise: document.getElementById('noise'),
+            scanlines: document.getElementById('scanlines'),
+            osd: document.getElementById('osd')
+        };
+
+        // 事件监听
+        Object.keys(ui).forEach(key => {
+            if(ui[key].type === 'range') {
+                ui[key].addEventListener('input', (e) => {
+                    document.getElementById(`v-${key}`).innerText = e.target.value;
+                });
+            }
+            ui[key].addEventListener('change', () => {
+                 if(key === 'osd') {
+                    osdText.style.display = ui.osd.checked ? 'block' : 'none';
+                    osdTime.style.display = ui.osd.checked ? 'block' : 'none';
+                 }
+            });
+        });
+
+        document.getElementById('upload').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const img = new Image();
+                img.onload = () => {
+                    sourceImg = img;
+                    if(!animationId) animate();
+                };
+                img.src = evt.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+        
+        // 更新时间显示
+        setInterval(() => {
+            const now = new Date();
+            // 模拟一个固定的旧日期，但时间在走
+            const dateStr = "OCT 26 1995";
+            const timeStr = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute:'2-digit', second:'2-digit' }).replace(/^0/,'');
+            osdTime.innerHTML = `${dateStr}<br>${timeStr}`;
+        }, 1000);
+
+
+        function animate() {
+            time += 0.1;
+            render();
+            animationId = requestAnimationFrame(animate);
+        }
+
+        function render() {
+            if (!sourceImg) return;
+
+            // 设置画布大小 (限制最大宽度以保证性能)
+            const maxW = 800;
+            let w = sourceImg.width;
+            let h = sourceImg.height;
+            if (w > maxW) { h = Math.round(h * (maxW / w)); w = maxW; }
+            canvas.width = w; canvas.height = h;
+            bufferCanvas.width = w; bufferCanvas.height = h;
+
+            // 获取参数
+            const shiftAmt = parseInt(ui.shift.value);
+            const trackAmt = parseInt(ui.trackAmt.value);
+            const trackPos = parseInt(ui.trackPos.value) / 100;
+            const wobbleAmt = parseInt(ui.wobble.value);
+            const noiseAmt = parseInt(ui.noise.value);
+            const hasScanlines = ui.scanlines.checked;
+
+            // --- Step 1: 绘制基础图像到 Buffer ---
+            bufferCtx.clearRect(0,0,w,h);
+            bufferCtx.drawImage(sourceImg, 0, 0, w, h);
+
+            // --- Step 2: 应用抖动 (Wobble) ---
+            // 通过切片偏移来实现
+            ctx.clearRect(0,0,w,h);
+            const sliceHeight = 4; // 切片高度
+            for (let y = 0; y < h; y += sliceHeight) {
+                // 计算每一行的横向偏移量 (正弦波 + 随机噪波)
+                const offsetX = Math.sin(y * 0.02 + time * 2) * wobbleAmt * 0.5 + (Math.random()-0.5) * wobbleAmt * 0.5;
+                // 从 buffer 复制一行到主画布，并带有偏移
+                ctx.drawImage(bufferCanvas, 
+                    0, y, w, sliceHeight, // 源区域
+                    offsetX, y, w, sliceHeight // 目标区域
+                );
+            }
+            
+            // --- Step 3: 应用色彩漂移 (RGB Shift) ---
+            // 利用 globalCompositeOperation 'lighter' 或手动分离通道
+            // 这里用一个简化的方法：把画面分别染红和染蓝，然后错位叠加
+            if (shiftAmt > 0) {
+                ctx.globalCompositeOperation = 'screen'; // 滤色叠加
+
+                // 红色通道漂移
+                bufferCtx.clearRect(0,0,w,h);
+                bufferCtx.fillStyle = '#ff0000'; bufferCtx.fillRect(0,0,w,h);
+                bufferCtx.globalCompositeOperation = 'multiply';
+                bufferCtx.drawImage(sourceImg, 0, 0, w, h); // 得到纯红图像
+                ctx.drawImage(bufferCanvas, -shiftAmt, 0);
+
+                // 蓝色通道漂移
+                bufferCtx.clearRect(0,0,w,h);
+                bufferCtx.fillStyle = '#0000ff'; bufferCtx.fillRect(0,0,w,h);
+                bufferCtx.drawImage(sourceImg, 0, 0, w, h); // 得到纯蓝图像
+                ctx.drawImage(bufferCanvas, shiftAmt, 0);
+                
+                ctx.globalCompositeOperation = 'source-over'; // 恢复
+            }
+
+            // 获取当前像素数据进行后续处理
+            const imgData = ctx.getImageData(0, 0, w, h);
+            const data = imgData.data;
+
+            // --- Step 4: 磁带跟踪噪点 (Tracking Noise) ---
+            if (trackAmt > 0) {
+                const trackCenterY = h * trackPos;
+                const trackHeight = h * 0.15 * (trackAmt/50); // 噪点带高度
+                
+                for (let y = 0; y < h; y++) {
+                    // 计算当前行距离噪点中心的距离
+                    const dist = Math.abs(y - trackCenterY);
+                    if (dist < trackHeight) {
+                        // 距离越近，噪点概率越大
+                        const noiseProb = 1 - (dist / trackHeight);
+                        for (let x = 0; x < w; x++) {
+                            if (Math.random() < noiseProb * (trackAmt/100) * 0.8) {
+                                const i = (y * w + x) * 4;
+                                // 随机黑白噪点
+                                const val = Math.random() > 0.5 ? 255 : 0;
+                                data[i] = val + (Math.random()*50);     // R
+                                data[i+1] = val + (Math.random()*50);   // G
+                                data[i+2] = val + (Math.random()*50);   // B
+                                // 偶尔出现严重的信号丢失（横向白色条纹）
+                                if (Math.random() < 0.001 * trackAmt) {
+                                     const stripLen = Math.random() * w;
+                                     for(let k=0; k<stripLen && x+k<w; k++) {
+                                         const idx = (y * w + (x+k)) * 4;
+                                         data[idx] = data[idx+1] = data[idx+2] = 240;
+                                     }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // --- Step 5: 整体噪点与扫描线 ---
+            for (let i = 0; i < data.length; i += 4) {
+                // 整体底噪
+                if (noiseAmt > 0) {
+                    const noise = (Math.random() - 0.5) * noiseAmt * 2;
+                    data[i] += noise; data[i+1] += noise; data[i+2] += noise;
+                }
+                
+                // 扫描线 (每隔一行压暗)
+                if (hasScanlines) {
+                    const y = Math.floor((i / 4) / w);
+                    if (y % 2 === 0) {
+                        data[i] *= 0.8; data[i+1] *= 0.8; data[i+2] *= 0.8;
+                    }
+                }
+            }
+
+            ctx.putImageData(imgData, 0, 0);
+        }
+
+        function saveImage() {
+            if (!sourceImg) return alert("No tape inserted!");
+            
+            // 创建一个新的画布用于合成 OSD 和画面
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = canvas.width;
+            exportCanvas.height = canvas.height;
+            const exCtx = exportCanvas.getContext('2d');
+            
+            // 绘制主画面
+            render(); // 确保是最新一帧
+            exCtx.drawImage(canvas, 0, 0);
+            
+            // 如果开启了 OSD，手动绘制文字到画布上 (因为 dom 元素不能直接保存)
+            if (ui.osd.checked) {
+                exCtx.font = "2rem 'VT323', monospace";
+                exCtx.fillStyle = "#00ff00";
+                exCtx.shadowColor = "rgba(0,0,0,0.5)";
+                exCtx.shadowOffsetX = 2; exCtx.shadowOffsetY = 2;
+                exCtx.fillText("▶ SP PLAY", 30, 50);
+                
+                exCtx.font = "1.5rem 'VT323', monospace";
+                exCtx.textAlign = "right";
+                const timeLines = osdTime.innerText.split('\n');
+                exCtx.fillText(timeLines[0], canvas.width - 30, canvas.height - 50);
+                exCtx.fillText(timeLines[1], canvas.width - 30, canvas.height - 25);
+            }
+
+            const link = document.createElement('a');
+            link.download = 'vhs-recording.jpg';
+            link.href = exportCanvas.toDataURL('image/jpeg', 0.9);
+            link.click();
+        }
+    </script>
+
+<!-- image-lab: back to index -->
+<a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
+<style>
+#__lab_back{position:fixed;right:14px;bottom:14px;z-index:2147483647;
+  font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
+  padding:8px 11px;border-radius:999px;text-decoration:none;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}
+#__lab_back:hover{opacity:1}
+</style>
+</body>
+</html>

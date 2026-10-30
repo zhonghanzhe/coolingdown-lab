@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TOKYO NEON WAVE: City Pop 风格生成器</title>
+    <style>
+        :root {
+            --bg: #0a0a12; /* 深夜蓝背景 */
+            --panel: rgba(20, 20, 35, 0.9);
+            --text: #e0e0ff;
+            --accent-pink: #ff00cc;
+            --accent-blue: #00ffff;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+            background-color: var(--bg);
+            background-image: linear-gradient(0deg, #1a1a2e 0%, #0a0a12 100%);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* 具有 80 年代感的标题 */
+        h1 {
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 10px;
+            font-style: italic;
+            background: linear-gradient(90deg, var(--accent-blue), #fff, var(--accent-pink));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 2px 2px 10px rgba(0, 255, 255, 0.5);
+        }
+        h2 {
+            margin: 0 0 30px 0; font-weight: 400; font-size: 1rem; color: var(--accent-blue); letter-spacing: 5px; opacity: 0.8;
+        }
+
+        .main-layout {
+            display: flex;
+            gap: 30px;
+            width: 100%;
+            max-width: 1400px;
+            justify-content: center;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .controls {
+            width: 320px;
+            background: var(--panel);
+            padding: 25px;
+            border-radius: 16px;
+            border: 2px solid transparent;
+            /* 霓虹边框效果 */
+            background-image: linear-gradient(var(--panel), var(--panel)), linear-gradient(135deg, var(--accent-blue), var(--accent-pink));
+            background-origin: border-box;
+            background-clip: padding-box, border-box;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
+            display: flex; flex-direction: column; gap: 18px;
+            flex-shrink: 0;
+            backdrop-filter: blur(10px);
+        }
+
+        .canvas-wrapper {
+            flex: 1;
+            min-width: 400px;
+            max-width: 900px;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(255, 0, 204, 0.3);
+            border: 1px solid #333;
+            position: relative;
+            min-height: 400px;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        canvas { max-width: 100%; height: auto; display: block; }
+
+        /* UI 控件样式 */
+        h3 { margin: 5px 0 10px 0; font-size: 0.85rem; color: var(--accent-blue); text-transform: uppercase; letter-spacing: 1px; }
+        label { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 5px; color: #aaa; }
+        
+        /* 复古霓虹滑块 */
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px; background: #222; border-radius: 3px; border: 1px solid #444;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%;
+            background: var(--accent-pink); margin-top: -6px; box-shadow: 0 0 10px var(--accent-pink); cursor: grab;
+        }
+
+        select, .btn {
+            width: 100%; padding: 12px; background: rgba(0,0,0,0.5); border: 1px solid var(--accent-blue);
+            color: var(--accent-blue); font-weight: bold; text-transform: uppercase; cursor: pointer;
+            text-align: center; border-radius: 6px; transition: 0.3s; box-sizing: border-box; font-family: inherit;
+        }
+        .btn:hover, select:hover { background: var(--accent-blue); color: #000; box-shadow: 0 0 20px var(--accent-blue); }
+        
+        .btn-main { 
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-pink)); 
+            color: #fff; border: none; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        .btn-main:hover { opacity: 0.9; box-shadow: 0 0 25px var(--accent-pink); }
+
+        input[type="file"] { display: none; }
+        #loadingText { position: absolute; color: var(--accent-pink); pointer-events: none; display: none; text-shadow: 0 0 10px; }
+    </style>
+</head>
+<body>
+
+    <h1>Tokyo Neon Wave</h1>
+    <h2>トーキョー・ネオン・ウェーブ</h2>
+
+    <div class="main-layout">
+        <div class="controls">
+            <label class="file-upload btn btn-main">
+                📼 载入图片 (Load Image)
+                <input type="file" id="upload" accept="image/*">
+            </label>
+
+            <div>
+                <h3>🌆 氛围预设 (Vibe Preset)</h3>
+                <select id="preset">
+                    <option value="night">🌃 Night Cruise (都市霓虹夜)</option>
+                    <option value="day">🏖️ Pacific Breeze (夏日海风)</option>
+                </select>
+            </div>
+
+            <div>
+                <h3>✨ 光影调整 (Lighting & Mood)</h3>
+                <label>发光强度 (Bloom) <span id="v-bloom">50</span></label>
+                <input type="range" id="bloom" min="0" max="100" value="50">
+                
+                <label>复古颗粒 (Grain) <span id="v-grain">30</span></label>
+                <input type="range" id="grain" min="0" max="100" value="30">
+            </div>
+
+            <div>
+                <h3>🎨 色彩分级 (Color Grading)</h3>
+                <label>霓虹饱和度 (Neon Sat.) <span id="v-sat">120</span></label>
+                <input type="range" id="sat" min="80" max="200" value="120">
+                
+                <label>对比度 (Contrast) <span id="v-con">110</span></label>
+                <input type="range" id="con" min="80" max="150" value="110">
+
+                <label>色相偏移 (Hue Shift) <span id="v-hue">0</span></label>
+                <input type="range" id="hue" min="-30" max="30" value="0">
+            </div>
+
+            <div style="margin-top: 10px; border-top: 1px solid #333; padding-top: 20px;">
+                <h3>💾 导出 (Export)</h3>
+                <div style="display: flex; gap: 10px;">
+                    <select id="exportSize" style="flex:1">
+                        <option value="1">1x (预览)</option>
+                        <option value="2">2x (高清)</option>
+                        <option value="3">3x (超清)</option>
+                    </select>
+                    <button class="btn" style="flex:2; border-color: var(--accent-pink); color: var(--accent-pink);" onclick="downloadImage()">下载 JPG</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="canvas-wrapper">
+            <div id="loadingText">Processing...</div>
+            <canvas id="canvas"></canvas>
+        </div>
+    </div>
+
+    <canvas id="helperCanvas" style="display: none;"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const helperCanvas = document.getElementById('helperCanvas');
+        const helperCtx = helperCanvas.getContext('2d');
+        const loadingText = document.getElementById('loadingText');
+
+        let sourceImg = null;
+        let renderTimeout;
+
+        // UI 绑定
+        const ui = {
+            preset: document.getElementById('preset'),
+            bloom: document.getElementById('bloom'),
+            grain: document.getElementById('grain'),
+            sat: document.getElementById('sat'),
+            con: document.getElementById('con'),
+            hue: document.getElementById('hue')
+        };
+
+        // 监听事件
+        Object.keys(ui).forEach(key => {
+            ui[key].addEventListener('input', (e) => {
+                const span = document.getElementById(`v-${key}`);
+                if (span) span.innerText = e.target.value;
+                triggerRender();
+            });
+        });
+        
+        // 预设切换时自动调整参数
+        ui.preset.addEventListener('change', () => {
+            if (ui.preset.value === 'night') {
+                ui.bloom.value = 60; ui.sat.value = 130; ui.con.value = 115; ui.hue.value = -5;
+            } else {
+                ui.bloom.value = 30; ui.sat.value = 140; ui.con.value = 120; ui.hue.value = 5;
+            }
+            // 更新显示的数值
+            Object.keys(ui).forEach(key => {
+                const span = document.getElementById(`v-${key}`);
+                if(span) span.innerText = ui[key].value;
+            });
+            triggerRender();
+        });
+
+        function triggerRender() {
+            if (renderTimeout) clearTimeout(renderTimeout);
+            loadingText.style.display = 'block';
+            renderTimeout = setTimeout(() => {
+                renderPreview();
+                loadingText.style.display = 'none';
+            }, 100); // 防抖
+        }
+
+        document.getElementById('upload').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const img = new Image();
+                img.onload = () => {
+                    sourceImg = img;
+                    // 载入新图时重置为 Night 预设
+                    ui.preset.value = 'night';
+                    ui.preset.dispatchEvent(new Event('change'));
+                };
+                img.src = evt.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function renderPreview() {
+            if (!sourceImg) return;
+            const maxW = 800;
+            let w = sourceImg.width;
+            let h = sourceImg.height;
+            if (w > maxW) { h = Math.round(h * (maxW / w)); w = maxW; }
+            canvas.width = w; canvas.height = h;
+            processImage(canvas, w, h, 1);
+        }
+
+        // 核心图像处理函数 (支持高清导出)
+        function processImage(targetCanvas, w, h, scaleFactor) {
+            const targetCtx = targetCanvas.getContext('2d');
+            targetCanvas.width = w; targetCanvas.height = h;
+
+            // 准备辅助 Canvas
+            helperCanvas.width = w; helperCanvas.height = h;
+            helperCtx.clearRect(0,0,w,h);
+
+            const preset = ui.preset.value;
+            const bloomStrength = parseInt(ui.bloom.value) / 100;
+            const grainStrength = parseInt(ui.grain.value) / 100;
+            const sat = ui.sat.value + '%';
+            const con = ui.con.value + '%';
+            const hue = ui.hue.value + 'deg';
+
+            // --- Step 1: 基础调色 (Base Grading) ---
+            helperCtx.filter = `saturate(${sat}) contrast(${con}) hue-rotate(${hue})`;
+            helperCtx.drawImage(sourceImg, 0, 0, w, h);
+            helperCtx.filter = 'none'; // 重置滤镜
+
+            // --- Step 2: 氛围色彩叠加 (Vibe Overlay) ---
+            targetCtx.drawImage(helperCanvas, 0, 0); // 先把基础图画上去
+
+            targetCtx.globalCompositeOperation = 'overlay'; // 使用叠加模式进行染色
+            
+            let gradient;
+            if (preset === 'night') {
+                // 夜景：深蓝到紫红的渐变
+                gradient = targetCtx.createLinearGradient(0, 0, w, h);
+                gradient.addColorStop(0, 'rgba(0, 20, 100, 0.5)'); // 深蓝阴影
+                gradient.addColorStop(1, 'rgba(200, 0, 150, 0.4)'); // 紫红高光
+            } else {
+                // 日景：清透的青蓝色
+                gradient = targetCtx.createLinearGradient(0, 0, 0, h);
+                gradient.addColorStop(0, 'rgba(0, 180, 255, 0.3)'); // 青空
+                gradient.addColorStop(1, 'rgba(255, 220, 180, 0.2)'); // 暖色地平线
+            }
+            targetCtx.fillStyle = gradient;
+            targetCtx.fillRect(0, 0, w, h);
+            
+            // --- Step 3: 柔焦发光 (Bloom/Glow) ---
+            if (bloomStrength > 0.05) {
+                // 核心思路：把图再画一遍，但这遍要高斯模糊，并且用“滤色(Screen)”模式叠加
+                // 这样只有亮部会产生朦胧感，暗部保持深沉
+                targetCtx.globalCompositeOperation = 'screen';
+                // 模糊半径随尺寸变大
+                const blurRadius = Math.max(2, 10 * scaleFactor * bloomStrength); 
+                targetCtx.filter = `blur(${blurRadius}px) brightness(${1 + bloomStrength * 0.5})`;
+                targetCtx.globalAlpha = bloomStrength * 0.8; // 控制发光层透明度
+                targetCtx.drawImage(helperCanvas, 0, 0); // 画的是经过 Step 1 处理过的图
+                
+                // 针对夜景，再加一层强调霓虹色的光晕
+                if (preset === 'night') {
+                    targetCtx.filter = `blur(${blurRadius * 2}px) saturate(200%) hue-rotate(-20deg)`;
+                    targetCtx.globalAlpha = bloomStrength * 0.4;
+                    targetCtx.drawImage(helperCanvas, 0, 0);
+                }
+
+                targetCtx.filter = 'none';
+                targetCtx.globalAlpha = 1.0;
+            }
+
+            // --- Step 4: 复古颗粒与暗角 (Grain & Vignette) ---
+            targetCtx.globalCompositeOperation = 'overlay';
+            
+            // 生成动态噪点
+            if (grainStrength > 0.05) {
+                const imageData = targetCtx.getImageData(0, 0, w, h);
+                const data = imageData.data;
+                for (let i = 0; i < data.length; i += 4) {
+                    // 生成单色噪点
+                    const noise = (Math.random() - 0.5) * grainStrength * 100;
+                    data[i] += noise;
+                    data[i+1] += noise;
+                    data[i+2] += noise;
+                }
+                targetCtx.putImageData(imageData, 0, 0);
+            }
+
+            // 暗角 (Vignette) - 让四周变暗，突出中心
+            const vignette = targetCtx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w*0.7);
+            vignette.addColorStop(0, 'rgba(0,0,0,0)');
+            vignette.addColorStop(1, `rgba(0,10,30, ${preset === 'night' ? 0.5 : 0.2})`);
+            
+            targetCtx.globalCompositeOperation = 'multiply'; // 正片叠底压暗四周
+            targetCtx.fillStyle = vignette;
+            targetCtx.fillRect(0, 0, w, h);
+
+            // 重置
+            targetCtx.globalCompositeOperation = 'source-over';
+        }
+
+        // 高清导出 (复用之前的逻辑)
+        function downloadImage() {
+            if (!sourceImg) return alert("请先载入图片！");
+            loadingText.style.display = 'block';
+            loadingText.innerText = 'Rendering High-Res...';
+
+            setTimeout(() => {
+                const multiplier = parseInt(document.getElementById('exportSize').value);
+                const targetW = sourceImg.width * multiplier;
+                const targetH = sourceImg.height * multiplier;
+                
+                const offCanvas = document.createElement('canvas');
+                processImage(offCanvas, targetW, targetH, multiplier);
+
+                const link = document.createElement('a');
+                link.download = `tokyo-neon-wave-${multiplier}x.jpg`;
+                link.href = offCanvas.toDataURL('image/jpeg', 0.92);
+                link.click();
+
+                loadingText.style.display = 'none';
+                loadingText.innerText = 'Processing...';
+            }, 100);
+        }
+    </script>
+
+<!-- image-lab: back to index -->
+<a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
+<style>
+#__lab_back{position:fixed;right:14px;bottom:14px;z-index:2147483647;
+  font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
+  padding:8px 11px;border-radius:999px;text-decoration:none;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}
+#__lab_back:hover{opacity:1}
+</style>
+</body>
+</html>

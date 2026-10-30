@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TOKYO ILLUSTRATOR: 城市流行插画机</title>
+    <style>
+        :root {
+            --bg: #e0e5ec; /* 复古米白背景 */
+            --panel: #f0f3f7;
+            --text: #333;
+            --accent-blue: #0055ff; /* 永井博蓝 */
+            --accent-pink: #ff6699;
+            --shadow: rgba(0, 85, 255, 0.15);
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+            background-color: var(--bg);
+            /* 复古波点背景纹理 */
+            background-image: radial-gradient(var(--shadow) 1px, transparent 1px);
+            background-size: 20px 20px;
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        h1 {
+            font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: 2px;
+            margin-bottom: 5px; color: var(--accent-blue);
+            text-shadow: 3px 3px 0px var(--accent-pink);
+        }
+        h2 { margin: 0 0 25px 0; font-weight: 700; font-size: 1rem; color: var(--accent-pink); letter-spacing: 3px; }
+
+        .main-layout {
+            display: flex; gap: 25px; width: 100%; max-width: 1300px;
+            justify-content: center; align-items: flex-start; flex-wrap: wrap;
+        }
+
+        .controls {
+            width: 300px; background: var(--panel); padding: 25px; border-radius: 12px;
+            /* 新拟态风格边框，更有实体唱片机感 */
+            box-shadow: 8px 8px 16px #d1d9e6, -8px -8px 16px #ffffff;
+            border: 3px solid #fff;
+            display: flex; flex-direction: column; gap: 18px; flex-shrink: 0;
+        }
+
+        .canvas-wrapper {
+            flex: 1; min-width: 400px; max-width: 900px;
+            background: #fff; border-radius: 4px; overflow: hidden;
+            /* 画框感 */
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border: 8px solid #fff;
+            position: relative; min-height: 400px; display: flex; align-items: center; justify-content: center;
+        }
+        /* 给画布加一个复古相框内阴影 */
+        .canvas-wrapper::after {
+            content: ''; position: absolute; top:0; left:0; right:0; bottom:0;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.1); pointer-events: none;
+        }
+
+        canvas { max-width: 100%; height: auto; display: block; }
+
+        h3 { margin: 5px 0 10px 0; font-size: 0.85rem; color: var(--accent-blue); text-transform: uppercase; font-weight: 800;}
+        label { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 5px; color: #666; font-weight: 600;}
+        
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 8px; background: #d1d9e6; border-radius: 4px; border: 1px solid #fff;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%;
+            background: var(--accent-blue); margin-top: -6px; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); cursor: grab;
+            border: 2px solid #fff;
+        }
+
+        select, .btn {
+            width: 100%; padding: 12px; background: var(--panel); border: 2px solid #fff;
+            color: var(--accent-blue); font-weight: 800; text-transform: uppercase; cursor: pointer;
+            text-align: center; border-radius: 8px; transition: 0.3s; box-sizing: border-box;
+            box-shadow: 4px 4px 8px #d1d9e6, -4px -4px 8px #ffffff;
+        }
+        .btn:hover, select:hover { transform: translateY(-2px); box-shadow: 6px 6px 12px #d1d9e6, -6px -6px 12px #ffffff; color: var(--accent-pink);}
+        
+        .btn-main { 
+            background: var(--accent-blue); color: #fff; border: none;
+            box-shadow: 4px 4px 10px rgba(0, 85, 255, 0.3);
+        }
+        .btn-main:hover { background: var(--accent-pink); color: #fff; }
+
+        input[type="file"] { display: none; }
+        #loadingText { position: absolute; color: var(--accent-blue); pointer-events: none; display: none; font-weight: bold; background: rgba(255,255,255,0.8); padding: 10px 20px; border-radius: 20px;}
+    </style>
+</head>
+<body>
+
+    <h1>Tokyo Illustrator</h1>
+    <h2>トーキョー・イラストレーター</h2>
+
+    <div class="main-layout">
+        <div class="controls">
+            <label class="file-upload btn btn-main">
+                🎨 载入照片 (Load Photo)
+                <input type="file" id="upload" accept="image/*">
+            </label>
+
+            <div>
+                <h3>🖌️ 插画风格 (Style Palette)</h3>
+                <select id="preset">
+                    <option value="poolside">🏊 Poolside Day (永井博·蓝调)</option>
+                    <option value="sunset">🌇 Sunset Drive (暖色·黄昏)</option>
+                    <option value="mono">🕶️ Graphic Mono (高对比·漫画)</option>
+                </select>
+            </div>
+
+            <div>
+                <h3>🖼️ 笔触与质感 (Stroke & Texture)</h3>
+                <label>扁平度 (Flatness) <span id="v-flat">60</span></label>
+                <input type="range" id="flat" min="10" max="100" value="60">
+                
+                <label>描边强度 (Outline) <span id="v-edge">40</span></label>
+                <input type="range" id="edge" min="0" max="100" value="40">
+
+                <label>画布纹理 (Texture) <span id="v-tex">30</span></label>
+                <input type="range" id="tex" min="0" max="50" value="30">
+            </div>
+
+            <div>
+                <h3>🎨 色彩调和 (Color Tuning)</h3>
+                <label>饱和度 (Saturation) <span id="v-sat">140</span></label>
+                <input type="range" id="sat" min="100" max="200" value="140">
+                
+                <label>阴影蓝度 (Shadow Blue) <span id="v-blue">50</span></label>
+                <input type="range" id="blue" min="0" max="100" value="50">
+            </div>
+
+            <div style="margin-top: 10px; border-top: 2px solid #e6ebf1; padding-top: 20px;">
+                <h3>💾 导出作品 (Export Art)</h3>
+                <div style="display: flex; gap: 10px;">
+                    <select id="exportSize" style="flex:1">
+                        <option value="1">1x (预览)</option>
+                        <option value="2">2x (高清)</option>
+                        <option value="3">3x (超清)</option>
+                    </select>
+                    <button class="btn" style="flex:2; color: var(--accent-pink);" onclick="downloadImage()">下载作品 JPG</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="canvas-wrapper">
+            <div id="loadingText">Creating Illustration...</div>
+            <canvas id="canvas"></canvas>
+        </div>
+    </div>
+
+    <canvas id="layer1" style="display: none;"></canvas>
+    <canvas id="layer2" style="display: none;"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const layer1 = document.getElementById('layer1');
+        const ctx1 = layer1.getContext('2d');
+        const layer2 = document.getElementById('layer2');
+        const ctx2 = layer2.getContext('2d');
+        const loadingText = document.getElementById('loadingText');
+
+        let sourceImg = null;
+        let renderTimeout;
+
+        // UI 绑定
+        const ui = {
+            preset: document.getElementById('preset'),
+            flat: document.getElementById('flat'),
+            edge: document.getElementById('edge'),
+            tex: document.getElementById('tex'),
+            sat: document.getElementById('sat'),
+            blue: document.getElementById('blue')
+        };
+
+        Object.keys(ui).forEach(key => {
+            ui[key].addEventListener('input', (e) => {
+                const span = document.getElementById(`v-${key}`);
+                if (span) span.innerText = e.target.value;
+                triggerRender();
+            });
+        });
+        
+        // 预设切换
+        ui.preset.addEventListener('change', () => {
+            const p = ui.preset.value;
+            if (p === 'poolside') {
+                ui.sat.value = 140; ui.blue.value = 60; ui.flat.value = 60;
+            } else if (p === 'sunset') {
+                ui.sat.value = 160; ui.blue.value = 20; ui.flat.value = 50;
+            } else {
+                ui.sat.value = 110; ui.blue.value = 0; ui.flat.value = 80; ui.edge.value = 60;
+            }
+            Object.keys(ui).forEach(key => {
+                const span = document.getElementById(`v-${key}`);
+                if(span) span.innerText = ui[key].value;
+            });
+            triggerRender();
+        });
+
+        function triggerRender() {
+            if (renderTimeout) clearTimeout(renderTimeout);
+            loadingText.style.display = 'block';
+            renderTimeout = setTimeout(() => {
+                renderPreview();
+                loadingText.style.display = 'none';
+            }, 150); // 稍微增加防抖时间，因为计算量大了
+        }
+
+        document.getElementById('upload').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const img = new Image();
+                img.onload = () => {
+                    sourceImg = img;
+                    triggerRender();
+                };
+                img.src = evt.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function renderPreview() {
+            if (!sourceImg) return;
+            // 预览时限制尺寸以保证速度，插画计算比较重
+            const maxW = 700; 
+            let w = sourceImg.width;
+            let h = sourceImg.height;
+            if (w > maxW) { h = Math.round(h * (maxW / w)); w = maxW; }
+            canvas.width = w; canvas.height = h;
+            processImage(canvas, w, h, 1);
+        }
+
+        // --- 核心：插画生成算法 ---
+        function processImage(targetCanvas, w, h, scaleFactor) {
+            const targetCtx = targetCanvas.getContext('2d');
+            targetCanvas.width = w; targetCanvas.height = h;
+            
+            // 初始化辅助层
+            layer1.width = w; layer1.height = h;
+            layer2.width = w; layer2.height = h;
+            ctx1.clearRect(0,0,w,h); ctx2.clearRect(0,0,w,h);
+
+            const flatStrength = parseInt(ui.flat.value);
+            const edgeStrength = parseInt(ui.edge.value) / 100;
+            const texStrength = parseInt(ui.tex.value) / 100;
+            const sat = ui.sat.value + '%';
+            const blueShadow = parseInt(ui.blue.value) / 100;
+            const preset = ui.preset.value;
+
+            // === Layer 1: 基础色块层 (The Flat Color Base) ===
+            // 通过极高的对比度来模拟色阶分离（Posterization）效果
+            // 对比度越高，过渡色越少，色块感越强
+            const contrast = 100 + flatStrength * 1.5; 
+            ctx1.filter = `saturate(${sat}) contrast(${contrast}%) brightness(1.1)`;
+            ctx1.drawImage(sourceImg, 0, 0, w, h);
+            ctx1.filter = 'none';
+
+            // === Layer 2: 描边层 (The Edges) ===
+            // 这是一个简化的边缘检测模拟：用一个模糊的负片叠加，产生高反差边缘
+            if (edgeStrength > 0.05) {
+                ctx2.filter = 'grayscale(100%) invert(100%)';
+                ctx2.drawImage(sourceImg, 0, 0, w, h);
+                
+                ctx2.globalCompositeOperation = 'difference';
+                ctx2.filter = `blur(${2 * scaleFactor}px)`; // 稍微模糊一点来寻找边缘
+                ctx2.drawImage(sourceImg, 0, 0, w, h);
+                
+                // 增强边缘对比度，使其变成黑线
+                ctx2.globalCompositeOperation = 'source-over';
+                ctx2.filter = 'contrast(500%) brightness(1.5) grayscale(100%)';
+                ctx2.drawImage(layer2, 0, 0, w, h); // 把自己重新画一遍应用滤镜
+                ctx2.filter = 'none';
+            }
+
+            // === 合成：主画布 ===
+            
+            // 1. 绘制基础色块层
+            targetCtx.drawImage(layer1, 0, 0);
+
+            // 2. City Pop 调色 (Blue Shadows / Warm Highlights)
+            targetCtx.globalCompositeOperation = 'overlay'; // 或 'soft-light'
+            let grade;
+            if (preset === 'sunset') {
+                grade = targetCtx.createLinearGradient(0, 0, 0, h);
+                grade.addColorStop(0, 'rgba(255, 100, 50, 0.4)'); // 顶部暖橙色
+                grade.addColorStop(1, `rgba(50, 0, 150, ${0.3 + blueShadow * 0.3})`); // 底部深紫色
+            } else if (preset === 'mono') {
+                 grade = 'rgba(0,0,0,0)'; // 黑白模式不调色
+            } else {
+                // Poolside 经典蓝调
+                grade = targetCtx.createLinearGradient(0, 0, 0, h);
+                grade.addColorStop(0, 'rgba(0, 200, 255, 0.2)'); // 顶部亮青色
+                grade.addColorStop(1, `rgba(0, 50, 180, ${0.4 + blueShadow * 0.4})`); // 底部深蓝色阴影
+            }
+            targetCtx.fillStyle = grade;
+            targetCtx.fillRect(0, 0, w, h);
+
+            // 3. 叠加描边层 (Multiply 正片叠底)
+            if (edgeStrength > 0.05) {
+                targetCtx.globalCompositeOperation = 'multiply';
+                targetCtx.globalAlpha = edgeStrength * 1.5; // 增强描边可见度
+                // 因为 layer2 是黑底白线，我们需要反转它变成白底黑线才能用 multiply
+                targetCtx.filter = 'invert(100%)'; 
+                targetCtx.drawImage(layer2, 0, 0);
+                targetCtx.filter = 'none';
+                targetCtx.globalAlpha = 1.0;
+            }
+
+            // 4. 添加画布纹理 (Texture Overlay)
+            if (texStrength > 0.05) {
+                targetCtx.globalCompositeOperation = 'overlay';
+                targetCtx.globalAlpha = texStrength;
+                // 生成简单的噪点纹理
+                const imageData = targetCtx.getImageData(0,0,w,h);
+                for(let i=0; i<imageData.data.length; i+=4) {
+                    const noise = (Math.random()-0.5) * 50;
+                    imageData.data[i] += noise; imageData.data[i+1] += noise; imageData.data[i+2] += noise;
+                }
+                // 这里为了性能，我们不直接 putImageData，而是用一个小技巧：绘制一个半透明的噪点层
+                // 实际生成纹理太慢，我们用纯色噪点模拟
+                targetCtx.fillStyle = '#808080'; // 中性灰
+                targetCtx.fillRect(0,0,w,h);
+                // (更真实的纹理需要加载图片素材，这里用算法简化模拟)
+                 targetCtx.globalCompositeOperation = 'hard-light';
+                 targetCtx.globalAlpha = texStrength * 0.7;
+                 for (let i = 0; i < w; i += 4 * scaleFactor) {
+                    for (let j = 0; j < h; j += 4 * scaleFactor) {
+                        if ((i+j) % 8 === 0) {
+                             targetCtx.fillStyle = 'rgba(0,0,0,0.2)';
+                             targetCtx.fillRect(i, j, 2 * scaleFactor, 2 * scaleFactor);
+                        }
+                    }
+                 }
+            }
+
+            // 重置
+            targetCtx.globalCompositeOperation = 'source-over';
+            targetCtx.globalAlpha = 1.0;
+        }
+
+        // 高清导出
+        function downloadImage() {
+            if (!sourceImg) return alert("请先载入图片！");
+            loadingText.style.display = 'block';
+            loadingText.innerText = 'Rendering High-Res Artwork...';
+
+            setTimeout(() => {
+                const multiplier = parseInt(document.getElementById('exportSize').value);
+                const targetW = sourceImg.width * multiplier;
+                const targetH = sourceImg.height * multiplier;
+                
+                const offCanvas = document.createElement('canvas');
+                processImage(offCanvas, targetW, targetH, multiplier);
+
+                const link = document.createElement('a');
+                link.download = `tokyo-illustrator-${multiplier}x.jpg`;
+                // 插画风格用 PNG 导出可能更有质感，但 JPG 更通用
+                link.href = offCanvas.toDataURL('image/jpeg', 0.95);
+                link.click();
+
+                loadingText.style.display = 'none';
+                loadingText.innerText = 'Creating Illustration...';
+            }, 200);
+        }
+    </script>
+
+<!-- image-lab: back to index -->
+<a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
+<style>
+#__lab_back{position:fixed;right:14px;bottom:14px;z-index:2147483647;
+  font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
+  padding:8px 11px;border-radius:999px;text-decoration:none;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}
+#__lab_back:hover{opacity:1}
+</style>
+</body>
+</html>

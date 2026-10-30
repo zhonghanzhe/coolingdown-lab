@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CONTOUR-X: 轮廓艺术生成器</title>
+    <style>
+        :root {
+            --bg: #050505; --panel: #111; --text: #eee; 
+            --accent: #5500ff; /* 赛博紫 */
+            --highlight: #00ffff; /* 荧光青 */
+        }
+        body {
+            font-family: 'Courier New', monospace; background-color: var(--bg); color: var(--text);
+            margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 20px;
+        }
+        h1 {
+            font-weight: 900; letter-spacing: -2px; margin-bottom: 20px; font-style: italic; font-size: 2.5rem;
+            text-shadow: 3px 3px 0px var(--accent); color: var(--highlight); text-transform: uppercase;
+        }
+        .main-layout { display: flex; gap: 20px; width: 100%; max-width: 1400px; align-items: flex-start; flex-wrap: wrap; }
+        
+        .canvas-wrapper {
+            flex: 1; min-width: 500px; background: #222; padding: 20px;
+            box-shadow: 10px 10px 0px var(--accent); border: 2px solid var(--highlight);
+            display: flex; justify-content: center; align-items: center; position: relative;
+        }
+        canvas { max-width: 100%; height: auto; display: block; image-rendering: pixelated; }
+
+        .controls {
+            width: 320px; background: var(--panel); padding: 25px; border: 2px solid #333;
+            display: flex; flex-direction: column; gap: 15px;
+        }
+        
+        h3 { margin: 0 0 5px 0; font-size: 0.8rem; color: var(--highlight); background: var(--accent); display: inline-block; padding: 2px 5px;}
+        label { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 5px; color: #ccc; }
+        
+        input[type="range"] { width: 100%; accent-color: var(--highlight); cursor: pointer; height: 5px; background: #333; }
+        
+        select, .btn {
+            width: 100%; padding: 12px; background: #000; border: 1px solid var(--highlight);
+            color: var(--highlight); font-weight: bold; text-transform: uppercase; cursor: pointer;
+            text-align: center; transition: 0.2s; box-sizing: border-box; font-family: inherit;
+        }
+        .btn:hover { background: var(--highlight); color: #000; box-shadow: 0 0 15px var(--highlight); }
+        .btn-main { background: var(--accent); color: #fff; border: none; }
+        .btn-main:hover { background: #fff; color: var(--accent); }
+
+        input[type="file"] { display: none; }
+        input[type="color"] { width: 100%; height: 30px; border: none; padding: 0; background: none; }
+        
+        .toggle-group { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; }
+        input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--highlight); }
+
+        #loading { position: absolute; color: var(--highlight); background: #000; padding: 5px; display: none;}
+    </style>
+</head>
+<body>
+
+    <h1>Contour-X</h1>
+
+    <div class="main-layout">
+        <div class="controls">
+            <label class="btn btn-main">
+                📂 载入图像 (LOAD IMG)
+                <input type="file" id="upload" accept="image/*">
+            </label>
+
+            <div>
+                <h3>STYLE MODE (风格)</h3>
+                <select id="renderMode">
+                    <option value="solid">⚡ Solid Edge (实线轮廓)</option>
+                    <option value="halftone">⚫ Halftone (半调网点)</option>
+                    <option value="scanline">📺 Scanline (电视扫描)</option>
+                    <option value="ascii">🔣 Matrix (字符乱码)</option>
+                </select>
+            </div>
+
+            <div>
+                <h3>PARAMETERS (参数)</h3>
+                <label>像素化程度 (Pixelate) <span id="v-pix">4</span></label>
+                <input type="range" id="pixelate" min="1" max="10" value="4">
+
+                <label>轮廓阈值 (Threshold) <span id="v-th">30</span></label>
+                <input type="range" id="threshold" min="5" max="100" value="30">
+                
+                <label>线条粗细 (Thickness) <span id="v-thick">1</span></label>
+                <input type="range" id="thickness" min="1" max="5" value="1">
+            </div>
+
+            <div>
+                <h3>COLORS (配色)</h3>
+                <label>轮廓色 (Outline)</label>
+                <input type="color" id="colFore" value="#00ffff">
+                <label>背景色 (Background)</label>
+                <input type="color" id="colBack" value="#1a0033">
+            </div>
+
+            <div class="toggle-group">
+                <input type="checkbox" id="addDeco" checked>
+                <span>添加海报装饰 (Add Poster UI)</span>
+            </div>
+
+            <div style="border-top: 1px solid #333; padding-top: 15px;">
+                <h3>EXPORT (导出)</h3>
+                <div style="display: flex; gap: 10px;">
+                    <select id="exportSize">
+                        <option value="1">1x (预览)</option>
+                        <option value="2">2x (高清)</option>
+                        <option value="4">4x (超清)</option>
+                    </select>
+                    <button class="btn" onclick="downloadImage()">保存 JPG</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="canvas-wrapper">
+            <div id="loading">PROCESSING...</div>
+            <canvas id="canvas"></canvas>
+        </div>
+    </div>
+
+    <canvas id="helperCanvas" style="display: none;"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const helperCanvas = document.getElementById('helperCanvas');
+        const helperCtx = helperCanvas.getContext('2d');
+        const loading = document.getElementById('loading');
+
+        let sourceImg = null;
+        let renderTimeout;
+
+        const ui = {
+            mode: document.getElementById('renderMode'),
+            pixel: document.getElementById('pixelate'),
+            thresh: document.getElementById('threshold'),
+            thick: document.getElementById('thickness'),
+            fore: document.getElementById('colFore'),
+            back: document.getElementById('colBack'),
+            deco: document.getElementById('addDeco')
+        };
+
+        // 事件监听
+        Object.keys(ui).forEach(key => {
+            ui[key].addEventListener('input', (e) => {
+                const span = document.getElementById(`v-${key.substring(0,3)}`); // 简单匹配ID
+                if(span) span.innerText = e.target.value;
+                if(key === 'deco' || key === 'mode') triggerRender(); // 立即刷新
+                else debounceRender(); // 防抖
+            });
+        });
+
+        function debounceRender() {
+            if (renderTimeout) clearTimeout(renderTimeout);
+            renderTimeout = setTimeout(render, 50);
+        }
+
+        function triggerRender() {
+            render();
+        }
+
+        document.getElementById('upload').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const img = new Image();
+                img.onload = () => {
+                    sourceImg = img;
+                    render();
+                };
+                img.src = evt.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // 核心渲染逻辑
+        function render() {
+            if (!sourceImg) return;
+            // 预览模式限制宽度
+            const maxW = 800;
+            let w = sourceImg.width;
+            let h = sourceImg.height;
+            if (w > maxW) { h = Math.round(h * (maxW / w)); w = maxW; }
+            
+            processImage(canvas, w, h, 1);
+        }
+
+        // 图像处理函数
+        function processImage(targetCanvas, w, h, scaleFactor) {
+            targetCanvas.width = w;
+            targetCanvas.height = h;
+            const targetCtx = targetCanvas.getContext('2d');
+
+            // 1. 获取参数
+            const pixelSize = Math.max(1, Math.floor(parseInt(ui.pixel.value) * scaleFactor));
+            const threshold = parseInt(ui.thresh.value);
+            const thickness = Math.max(1, parseInt(ui.thick.value) * scaleFactor);
+            const mode = ui.mode.value;
+            const colorFore = ui.fore.value;
+            const colorBack = ui.back.value;
+
+            // 2. 绘制背景
+            targetCtx.fillStyle = colorBack;
+            targetCtx.fillRect(0, 0, w, h);
+
+            // 3. 像素化采样
+            // 缩小画布以实现像素化，然后再读取数据
+            const smallW = Math.floor(w / pixelSize);
+            const smallH = Math.floor(h / pixelSize);
+            
+            helperCanvas.width = smallW;
+            helperCanvas.height = smallH;
+            helperCtx.drawImage(sourceImg, 0, 0, smallW, smallH);
+            
+            const imgData = helperCtx.getImageData(0, 0, smallW, smallH).data;
+
+            // 4. 边缘检测与绘制
+            targetCtx.fillStyle = colorFore;
+            targetCtx.strokeStyle = colorFore;
+
+            // 遍历小画布的每个像素
+            for (let y = 0; y < smallH; y++) {
+                for (let x = 0; x < smallW; x++) {
+                    const i = (y * smallW + x) * 4;
+                    
+                    // 获取当前像素亮度
+                    const b1 = (imgData[i] + imgData[i+1] + imgData[i+2]) / 3;
+
+                    // 获取右边和下边像素的亮度 (简单的差分边缘检测)
+                    let bRight = b1;
+                    let bBottom = b1;
+
+                    if (x < smallW - 1) {
+                        const iRight = (y * smallW + (x + 1)) * 4;
+                        bRight = (imgData[iRight] + imgData[iRight+1] + imgData[iRight+2]) / 3;
+                    }
+                    if (y < smallH - 1) {
+                        const iBottom = ((y + 1) * smallW + x) * 4;
+                        bBottom = (imgData[iBottom] + imgData[iBottom+1] + imgData[iBottom+2]) / 3;
+                    }
+
+                    // 计算差异
+                    const diff = Math.abs(b1 - bRight) + Math.abs(b1 - bBottom);
+
+                    // 映射回大画布坐标
+                    const drawX = x * pixelSize;
+                    const drawY = y * pixelSize;
+
+                    // 如果差异大于阈值，说明是边缘
+                    if (diff > threshold) {
+                        if (mode === 'solid') {
+                            targetCtx.fillRect(drawX, drawY, pixelSize + thickness, pixelSize + thickness);
+                        } 
+                        else if (mode === 'halftone') {
+                            targetCtx.beginPath();
+                            // 差异越大，点越大
+                            const radius = (pixelSize / 2) * Math.min(2, diff / threshold);
+                            targetCtx.arc(drawX + pixelSize/2, drawY + pixelSize/2, radius, 0, Math.PI*2);
+                            targetCtx.fill();
+                        }
+                        else if (mode === 'scanline') {
+                            targetCtx.fillRect(drawX, drawY + pixelSize/2 - thickness/2, pixelSize * 1.5, thickness);
+                        }
+                        else if (mode === 'ascii') {
+                            const chars = "+*/!^&";
+                            const char = chars[Math.floor(Math.random()*chars.length)];
+                            targetCtx.font = `bold ${pixelSize * 1.5}px monospace`;
+                            targetCtx.fillText(char, drawX, drawY + pixelSize);
+                        }
+                    }
+                }
+            }
+
+            // 5. 绘制装饰 UI (Poster Style)
+            if (ui.deco.checked) {
+                drawDecorations(targetCtx, w, h, colorFore, scaleFactor);
+            }
+        }
+
+        // 绘制酸性设计风格的装饰元素
+        function drawDecorations(ctx, w, h, color, s) {
+            ctx.fillStyle = color;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2 * s;
+            const padding = 20 * s;
+
+            // 1. 边框
+            ctx.strokeRect(padding, padding, w - padding*2, h - padding*2);
+
+            // 2. 角落十字准星
+            const crossSize = 10 * s;
+            const drawCross = (cx, cy) => {
+                ctx.beginPath();
+                ctx.moveTo(cx - crossSize, cy); ctx.lineTo(cx + crossSize, cy);
+                ctx.moveTo(cx, cy - crossSize); ctx.lineTo(cx, cy + crossSize);
+                ctx.stroke();
+            };
+            drawCross(padding, padding);
+            drawCross(w - padding, padding);
+            drawCross(padding, h - padding);
+            drawCross(w - padding, h - padding);
+
+            // 3. 随机条形码 / 数据块
+            const barW = 100 * s;
+            const barH = 30 * s;
+            let bx = w - padding - barW - 10 * s;
+            let by = padding + 10 * s;
+            
+            // 简单的伪条形码绘制
+            for(let i=0; i<20; i++) {
+                const lw = Math.random() * 5 * s;
+                const lx = bx + Math.random() * barW;
+                ctx.fillRect(lx, by, lw, barH);
+            }
+
+            // 4. 文字排版
+            ctx.font = `bold ${14 * s}px "Courier New", monospace`;
+            ctx.fillText("CONTOUR-X GEN.SYS", padding + 10*s, padding + 25*s);
+            ctx.fillText("TYPE: VISUAL ART", padding + 10*s, padding + 45*s);
+            
+            ctx.font = `${10 * s}px monospace`;
+            ctx.fillText("COPYRIGHT © 2024", w - padding - 130*s, h - padding - 15*s);
+            
+            // 5. 侧边圆点装饰
+            for(let i=0; i<5; i++) {
+                ctx.beginPath();
+                ctx.arc(padding + 10*s, h/2 - 40*s + i*20*s, 3*s, 0, Math.PI*2);
+                if (i%2===0) ctx.fill(); else ctx.stroke();
+            }
+        }
+
+        function downloadImage() {
+            if (!sourceImg) return alert("请先载入图片！");
+            loading.style.display = 'block';
+            
+            setTimeout(() => {
+                const multiplier = parseInt(document.getElementById('exportSize').value);
+                const targetW = sourceImg.width * multiplier;
+                const targetH = sourceImg.height * multiplier;
+                
+                const offCanvas = document.createElement('canvas');
+                // 这里的 scaleFactor 我们需要稍微处理一下
+                // 我们的 processImage 是基于 pixelSize 逻辑的
+                // 这里的 scaleFactor 应该基于相对于原图的缩放，或者相对于预览图？
+                // 简单点：我们让 processImage 接受目标尺寸，内部的 pixelSize 会乘以 scaleFactor
+                // 为了保证效果一致，scaleFactor 应该是 targetW / canvas.width (预览宽度)
+                
+                const previewW = canvas.width;
+                const scaleFactor = targetW / previewW;
+
+                processImage(offCanvas, targetW, targetH, scaleFactor);
+
+                const link = document.createElement('a');
+                link.download = `contour-art-${multiplier}x.jpg`;
+                link.href = offCanvas.toDataURL('image/jpeg', 0.95);
+                link.click();
+
+                loading.style.display = 'none';
+            }, 100);
+        }
+    </script>
+
+<!-- image-lab: back to index -->
+<a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
+<style>
+#__lab_back{position:fixed;right:14px;bottom:14px;z-index:2147483647;
+  font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
+  padding:8px 11px;border-radius:999px;text-decoration:none;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}
+#__lab_back:hover{opacity:1}
+</style>
+</body>
+</html>

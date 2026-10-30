@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>TERRAIN-SCAN OPS: 战术终端</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        :root { --bg: #000500; --ui: #0f0; --panel: rgba(0, 20, 0, 0.9); }
+        body { margin: 0; overflow: hidden; background: var(--bg); font-family: 'Courier New', monospace; color: var(--ui); }
+        
+        .hud {
+            position: absolute; pointer-events: none; width: 100%; height: 100%;
+            background: linear-gradient(rgba(0,255,0,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,0,0.05) 1px, transparent 1px);
+            background-size: 50px 50px; opacity: 0.3;
+        }
+        
+        .controls {
+            position: absolute; top: 20px; left: 20px; width: 280px;
+            background: var(--panel); border: 1px solid var(--ui); padding: 20px;
+            pointer-events: auto; display: flex; flex-direction: column; gap: 15px;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+        }
+        
+        h1 { margin: 0; font-size: 1rem; border-bottom: 1px solid var(--ui); padding-bottom: 5px; margin-bottom: 5px;}
+        
+        .btn {
+            background: #000; border: 1px solid var(--ui); color: var(--ui); padding: 10px;
+            cursor: pointer; text-transform: uppercase; font-weight: bold; text-align: center;
+            transition: 0.2s;
+        }
+        .btn:hover { background: var(--ui); color: #000; }
+        
+        input[type="range"] { width: 100%; accent-color: var(--ui); cursor: pointer; }
+        input[type="file"] { display: none; }
+        
+        label { display: flex; justify-content: space-between; font-size: 0.8rem; }
+        .tag { font-size: 0.7rem; background: var(--ui); color: #000; padding: 2px 4px; display: inline-block; margin-bottom: 5px;}
+        
+        #loading { position: absolute; top:50%; left:50%; transform:translate(-50%,-50%); display: none;}
+    </style>
+</head>
+<body>
+    <div class="hud"></div>
+    <div class="controls">
+        <h1>TERRAIN-OPS V.2</h1>
+        
+        <label class="btn">
+            [ UPLOAD TOPOGRAPHY ]
+            <input type="file" id="upload" accept="image/*">
+        </label>
+
+        <div>
+            <span class="tag">RENDER MODE</span>
+            <div style="display:flex; gap:5px;">
+                <button class="btn" style="flex:1" onclick="setMode('mesh')">MESH</button>
+                <button class="btn" style="flex:1" onclick="setMode('points')">POINTS</button>
+            </div>
+        </div>
+
+        <div>
+            <label>ELEVATION (高度) <span id="v-h">100</span></label>
+            <input type="range" id="height" min="0" max="300" value="100">
+        </div>
+        
+        <div>
+            <label>SCAN SPEED (扫描速度) <span id="v-s">1.0</span></label>
+            <input type="range" id="speed" min="0" max="3.0" step="0.1" value="1.0">
+        </div>
+
+        <button class="btn" onclick="saveImage()">[ EXPORT TACTICAL MAP ]</button>
+    </div>
+    
+    <div id="loading">ANALYZING DATA...</div>
+    <div id="canvas-container"></div>
+
+    <script id="vertexShader" type="x-shader/x-vertex">
+        uniform float uHeight;
+        uniform sampler2D uTexture;
+        varying float vElevation;
+        varying vec2 vUv;
+
+        void main() {
+            vUv = uv;
+            // 读取纹理亮度作为高度
+            vec4 texColor = texture2D(uTexture, uv);
+            float brightness = (texColor.r + texColor.g + texColor.b) / 3.0;
+            
+            vElevation = brightness;
+            
+            vec3 newPos = position;
+            newPos.z += brightness * uHeight; // 置换 Z 轴
+            
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(newPos, 1.0);
+            gl_PointSize = 2.0; // 点云大小
+        }
+    </script>
+
+    <script id="fragmentShader" type="x-shader/x-fragment">
+        uniform float uTime;
+        uniform vec3 uColorLow;
+        uniform vec3 uColorHigh;
+        uniform vec3 uScanColor;
+        varying float vElevation;
+        varying vec2 vUv;
+
+        void main() {
+            // 1. 基础热力图颜色 (根据高度插值)
+            vec3 baseColor = mix(uColorLow, uColorHigh, vElevation);
+            
+            // 2. 扫描波效果
+            // 使用 fract(time) 创建循环波，距离基于 vUv.y
+            float scanPos = fract(uTime * 0.2); 
+            float scanWidth = 0.05;
+            float dist = abs(vUv.y - scanPos);
+            
+            // 如果在扫描带内，混合高亮色
+            float scanMix = 1.0 - smoothstep(0.0, scanWidth, dist);
+            vec3 finalColor = mix(baseColor, uScanColor, scanMix * 0.8);
+            
+            // 3. 距离衰减 (让扫描线更明显)
+            if(scanMix > 0.1) {
+                gl_FragColor = vec4(finalColor, 1.0);
+            } else {
+                gl_FragColor = vec4(baseColor, 0.6); // 基础半透明
+            }
+        }
+    </script>
+
+    <script>
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000500);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 2000);
+        camera.position.set(0, -200, 300); // 俯视视角
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        let terrain;
+        let uniforms;
+        let currentMode = 'mesh'; // 'mesh' or 'points'
+        let geometry;
+
+        // 初始化 Shader 材质
+        uniforms = {
+            uTime: { value: 0 },
+            uHeight: { value: 100.0 },
+            uTexture: { value: null },
+            uColorLow: { value: new THREE.Color(0x003300) }, // 低处深绿
+            uColorHigh: { value: new THREE.Color(0x00ff00) }, // 高处亮绿
+            uScanColor: { value: new THREE.Color(0xffffff) }  // 扫描线白光
+        };
+
+        const material = new THREE.ShaderMaterial({
+            vertexShader: document.getElementById('vertexShader').textContent,
+            fragmentShader: document.getElementById('fragmentShader').textContent,
+            uniforms: uniforms,
+            wireframe: true,
+            transparent: true,
+            side: THREE.DoubleSide
+        });
+
+        // 默认几何体
+        geometry = new THREE.PlaneGeometry(400, 400, 256, 256);
+
+        // 加载图片
+        document.getElementById('upload').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if(!file) return;
+            
+            const loader = new THREE.TextureLoader();
+            loader.load(URL.createObjectURL(file), (tex) => {
+                uniforms.uTexture.value = tex;
+                createTerrain();
+            });
+        });
+
+        function createTerrain() {
+            if(terrain) scene.remove(terrain);
+            
+            if (currentMode === 'mesh') {
+                material.wireframe = true;
+                terrain = new THREE.Mesh(geometry, material);
+            } else {
+                material.wireframe = false; // Points 不需要 wireframe
+                terrain = new THREE.Points(geometry, material);
+            }
+            
+            terrain.rotation.x = -Math.PI / 2; // 放平
+            scene.add(terrain);
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            if(uniforms.uTexture.value) createTerrain();
+        }
+
+        // UI 监听
+        document.getElementById('height').addEventListener('input', e => {
+            uniforms.uHeight.value = parseFloat(e.target.value);
+            document.getElementById('v-h').innerText = e.target.value;
+        });
+        
+        let scanSpeed = 1.0;
+        document.getElementById('speed').addEventListener('input', e => {
+            scanSpeed = parseFloat(e.target.value);
+            document.getElementById('v-s').innerText = e.target.value;
+        });
+
+        // 动画
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            uniforms.uTime.value += 0.01 * scanSpeed;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        function saveImage() {
+            renderer.render(scene, camera);
+            const link = document.createElement('a');
+            link.download = 'terrain-ops-scan.jpg';
+            link.href = renderer.domElement.toDataURL('image/jpeg', 0.95);
+            link.click();
+        }
+    </script>
+
+<!-- image-lab: back to index -->
+<a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
+<style>
+#__lab_back{position:fixed;right:14px;bottom:14px;z-index:2147483647;
+  font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
+  padding:8px 11px;border-radius:999px;text-decoration:none;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}
+#__lab_back:hover{opacity:1}
+</style>
+</body>
+</html>

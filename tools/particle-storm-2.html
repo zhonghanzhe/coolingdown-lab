@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PARTICLE-STORM: 隔空感应版</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        :root {
+            --bg: #000; --panel: rgba(15, 15, 15, 0.85); --text: #eee; 
+            --accent: #00ffcc; --rec: #ff3b30; --cam: #ff9d00; --border: #333;
+        }
+        body { margin: 0; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; touch-action: none; }
+        
+        .controls {
+            position: absolute; top: 10px; right: 10px; width: 300px;
+            background: var(--panel); backdrop-filter: blur(10px);
+            padding: 15px; border-radius: 8px; border: 1px solid var(--border);
+            display: flex; flex-direction: column; gap: 12px; z-index: 100;
+            max-height: 95vh; overflow-y: auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        h1 { margin: 0; font-size: 1.1rem; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .section-title { font-size: 0.75rem; color: #888; text-transform: uppercase; margin-top: 5px; font-weight: bold; }
+
+        label { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 2px; color: #ccc; }
+        input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; height: 4px; background: #333; border-radius: 2px; }
+        
+        select, .btn {
+            width: 100%; padding: 8px; background: #222; border: 1px solid #444; color: #fff;
+            border-radius: 4px; cursor: pointer; font-weight: bold; text-align: center;
+            transition: 0.2s; box-sizing: border-box; font-size: 0.85rem;
+        }
+        
+        .btn-load { background: var(--accent); color: #000; border: none; }
+        .btn-load:hover { filter: brightness(1.2); }
+        
+        /* 摄像头按钮 */
+        .btn-cam { background: var(--cam); color: #000; border: none; }
+        .btn-cam:hover { filter: brightness(1.2); box-shadow: 0 0 15px var(--cam); }
+        .cam-active { animation: pulse-cam 2s infinite; }
+        
+        @keyframes pulse-cam { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+
+        /* 视频预览小窗 (调试用，平时隐藏) */
+        #videoPreview {
+            position: absolute; bottom: 20px; left: 20px; width: 160px; height: 120px;
+            border: 2px solid var(--cam); border-radius: 8px; display: none; z-index: 50;
+            object-fit: cover; transform: scaleX(-1); /* 镜像翻转 */
+            background: #000; opacity: 0.8;
+        }
+        
+        input[type="file"] { display: none; }
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: var(--accent); font-size: 1.5rem; display: none; text-shadow: 0 0 10px var(--accent); pointer-events: none;
+        }
+        #motionIndicator {
+            position: absolute; width: 20px; height: 20px; border: 2px solid var(--cam);
+            border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%);
+            display: none; z-index: 90; box-shadow: 0 0 10px var(--cam);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <h1>Gesture Storm</h1>
+        
+        <label class="btn btn-load">
+            📂 载入图片 (UPLOAD)
+            <input type="file" id="uploadInput" accept="image/*">
+        </label>
+
+        <div class="section-title" style="color:var(--cam);">🎥 隔空感应 (Gesture)</div>
+        <button class="btn btn-cam" id="btnCam" onclick="toggleCamera()">📷 开启摄像头控制</button>
+        <div style="font-size:0.7rem; color:#666; margin-top:5px;">
+            * 开启后，对着镜头挥手即可控制粒子。<br>
+            * 建议光线明亮，动作幅度大一点。
+        </div>
+
+        <div class="section-title">交互模式 (Mode)</div>
+        <select id="modeSelect">
+            <option value="repel">💥 物理排斥 (Repel) - 挥手打散</option>
+            <option value="magnet">🧲 磁力吸引 (Magnet) - 挥手聚拢</option>
+            <option value="liquid">🌊 自动流体 (Liquid)</option>
+            <option value="nebula">☁️ 静态云雾 (Nebula)</option>
+        </select>
+
+        <div class="section-title">物理参数 (Physics)</div>
+        <label>粒子大小 (Size) <span id="v-size">1.5</span></label>
+        <input type="range" id="pSize" min="0.1" max="5.0" step="0.1" value="1.5">
+        
+        <label>3D 深度 (Z-Depth) <span id="v-depth">100</span></label>
+        <input type="range" id="pDepth" min="0" max="500" value="100">
+        
+        <label>感应强度 (Force) <span id="v-force">1.0</span></label>
+        <input type="range" id="pForce" min="0.1" max="3.0" step="0.1" value="1.0">
+        
+        <label>采样密度 (Density) <span id="v-dens">Med</span></label>
+        <input type="range" id="pDens" min="1" max="5" step="1" value="3">
+
+        <button class="btn" style="background:#333; margin-top:10px;" onclick="resetCamera()">🔄 重置相机视角</button>
+    </div>
+
+    <div id="loading">✨ 粒子生成中...</div>
+    <div id="motionIndicator"></div> <video id="hiddenVideo" autoplay playsinline muted style="display:none;"></video>
+    <canvas id="motionCanvas" style="display:none;"></canvas>
+    <video id="videoPreview" autoplay playsinline muted></video>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        // ==========================================
+        // 1. 初始化 Three.js
+        // ==========================================
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
+        scene.fog = new THREE.FogExp2(0x000000, 0.0008); 
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 5000);
+        camera.position.z = 800; 
+
+        const renderer = new THREE.WebGLRenderer({ preserveDrawingBuffer: true, antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // ==========================================
+        // 2. 交互逻辑 (鼠标 + 触摸 + 摄像头)
+        // ==========================================
+        const mouse = new THREE.Vector2(-9999, -9999);
+        const raycaster = new THREE.Raycaster();
+        const planeGeo = new THREE.PlaneGeometry(10000, 10000);
+        const planeMat = new THREE.MeshBasicMaterial({ visible: false });
+        const mousePlane = new THREE.Mesh(planeGeo, planeMat);
+        scene.add(mousePlane);
+
+        // 统一更新指针位置
+        function updatePointer(x, y) {
+            mouse.x = (x / window.innerWidth) * 2 - 1;
+            mouse.y = -(y / window.innerHeight) * 2 + 1;
+        }
+
+        // 鼠标监听
+        document.addEventListener('mousemove', (e) => {
+            if (!isCameraActive) { // 只有没开摄像头时，鼠标才生效
+                e.preventDefault();
+                updatePointer(e.clientX, e.clientY);
+            }
+        });
+
+        // 触摸监听
+        document.addEventListener('touchmove', (e) => {
+            if (!isCameraActive && !e.target.closest('.controls')) {
+                e.preventDefault();
+                if (e.touches.length > 0) updatePointer(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, { passive: false });
+
+        // ==========================================
+        // 3. 摄像头动作捕捉 (Motion Detection)
+        // ==========================================
+        let isCameraActive = false;
+        let motionStream = null;
+        const videoInput = document.getElementById('hiddenVideo');
+        const videoPreview = document.getElementById('videoPreview');
+        const motionCanvas = document.getElementById('motionCanvas');
+        const motionCtx = motionCanvas.getContext('2d', { willReadFrequently: true });
+        const motionIndicator = document.getElementById('motionIndicator');
+        
+        let prevFrameData = null; // 上一帧数据
+        const sampleSize = 64; // 低分辨率采样，提高性能
+
+        async function toggleCamera() {
+            const btn = document.getElementById('btnCam');
+            
+            if (!isCameraActive) {
+                try {
+                    motionStream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { width: 320, height: 240, facingMode: "user" } // 请求低分辨率前置
+                    });
+                    
+                    videoInput.srcObject = motionStream;
+                    videoPreview.srcObject = motionStream;
+                    
+                    videoInput.play();
+                    
+                    isCameraActive = true;
+                    btn.innerText = "🛑 关闭摄像头";
+                    btn.classList.add('cam-active');
+                    videoPreview.style.display = 'block'; // 显示小窗
+                    motionIndicator.style.display = 'block'; // 显示追踪点
+                    
+                    // 初始化画布
+                    motionCanvas.width = sampleSize;
+                    motionCanvas.height = sampleSize;
+                    
+                    detectMotionLoop(); // 开始分析循环
+
+                } catch (err) {
+                    alert("无法访问摄像头: " + err.message);
+                }
+            } else {
+                // 关闭
+                if (motionStream) {
+                    motionStream.getTracks().forEach(track => track.stop());
+                }
+                isCameraActive = false;
+                btn.innerText = "📷 开启摄像头控制";
+                btn.classList.remove('cam-active');
+                videoPreview.style.display = 'none';
+                motionIndicator.style.display = 'none';
+                // 移开指针
+                mouse.x = -9999;
+                mouse.y = -9999;
+            }
+        }
+
+        function detectMotionLoop() {
+            if (!isCameraActive) return;
+
+            // 1. 将视频帧绘制到小画布
+            motionCtx.drawImage(videoInput, 0, 0, sampleSize, sampleSize);
+            
+            // 2. 获取当前像素数据
+            const currentFrame = motionCtx.getImageData(0, 0, sampleSize, sampleSize);
+            const data = currentFrame.data;
+            const length = data.length;
+
+            if (prevFrameData) {
+                let sumX = 0;
+                let sumY = 0;
+                let totalPixels = 0;
+                
+                // 3. 遍历像素，对比上一帧
+                for (let i = 0; i < length; i += 4) {
+                    // 简单的亮度对比 (RGB平均值差)
+                    const r = Math.abs(data[i] - prevFrameData[i]);
+                    const g = Math.abs(data[i+1] - prevFrameData[i+1]);
+                    const b = Math.abs(data[i+2] - prevFrameData[i+2]);
+                    const diff = (r + g + b) / 3;
+
+                    // 阈值判断：如果变化够大，认为是动作
+                    if (diff > 25) { 
+                        const index = i / 4;
+                        const x = index % sampleSize;
+                        const y = Math.floor(index / sampleSize);
+                        
+                        sumX += x;
+                        sumY += y;
+                        totalPixels++;
+                    }
+                }
+
+                // 4. 计算动作重心 (Centroid)
+                if (totalPixels > 5) { // 过滤微小噪点
+                    let avgX = sumX / totalPixels;
+                    let avgY = sumY / totalPixels;
+
+                    // 镜像翻转 (因为用户看自己是镜像的)
+                    avgX = sampleSize - avgX;
+
+                    // 映射到屏幕坐标 (0-1)
+                    const screenX = avgX / sampleSize;
+                    const screenY = avgY / sampleSize;
+
+                    // 更新 Three.js 鼠标向量 (-1 到 1)
+                    mouse.x = screenX * 2 - 1;
+                    mouse.y = -(screenY * 2 - 1); // Y轴也是反的
+
+                    // 更新 UI 指示器位置
+                    motionIndicator.style.left = (screenX * 100) + '%';
+                    motionIndicator.style.top = (screenY * 100) + '%';
+                }
+            }
+
+            // 保存当前帧为上一帧
+            // 注意：不能直接存引用，要拷贝数据
+            prevFrameData = new Uint8ClampedArray(data);
+
+            requestAnimationFrame(detectMotionLoop);
+        }
+
+
+        // ==========================================
+        // 4. 粒子系统核心 (与之前相同)
+        // ==========================================
+        let particleSystem;
+        let particlesData = []; 
+        let originalImg = null;
+
+        function getTexture() {
+            const cvs = document.createElement('canvas');
+            cvs.width = 32; cvs.height = 32;
+            const ctx = cvs.getContext('2d');
+            const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+            grad.addColorStop(0, 'rgba(255,255,255,1)');
+            grad.addColorStop(0.4, 'rgba(255,255,255,0.5)');
+            grad.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 32, 32);
+            return new THREE.CanvasTexture(cvs);
+        }
+        const particleTexture = getTexture();
+
+        const ui = {
+            size: document.getElementById('pSize'),
+            depth: document.getElementById('pDepth'),
+            force: document.getElementById('pForce'),
+            dens: document.getElementById('pDens'),
+            mode: document.getElementById('modeSelect')
+        };
+
+        ui.size.addEventListener('input', e => {
+            document.getElementById('v-size').innerText = e.target.value;
+            if(particleSystem) particleSystem.material.size = parseFloat(e.target.value);
+        });
+        ui.depth.addEventListener('input', e => document.getElementById('v-depth').innerText = e.target.value);
+        ui.force.addEventListener('input', e => document.getElementById('v-force').innerText = e.target.value);
+        ui.dens.addEventListener('input', e => { if(originalImg) createParticles(originalImg); });
+
+        document.getElementById('uploadInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if(!file) return;
+            document.getElementById('loading').style.display = 'block';
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const img = new Image();
+                img.src = evt.target.result;
+                img.onload = () => {
+                    originalImg = img;
+                    createParticles(img);
+                    document.getElementById('loading').style.display = 'none';
+                };
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function createParticles(image) {
+            if(particleSystem) scene.remove(particleSystem);
+
+            const canvas = document.createElement('canvas');
+            const step = [10, 8, 6, 4, 2, 1][parseInt(ui.dens.value)];
+            const maxW = 1000; 
+            
+            let w = image.width;
+            let h = image.height;
+            if (w > maxW) { h = Math.round(h * (maxW/w)); w = maxW; }
+
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(image, 0, 0, w, h);
+            const imgData = ctx.getImageData(0, 0, w, h).data;
+
+            const geometry = new THREE.BufferGeometry();
+            const positions = [];
+            const colors = [];
+            particlesData = [];
+
+            for (let y = 0; y < h; y += step) {
+                for (let x = 0; x < w; x += step) {
+                    const i = (y * w + x) * 4;
+                    const r = imgData[i] / 255;
+                    const g = imgData[i+1] / 255;
+                    const b = imgData[i+2] / 255;
+                    const a = imgData[i+3];
+                    const brightness = (r+g+b)/3;
+
+                    if (a > 20) {
+                        const px = x - w / 2;
+                        const py = -(y - h / 2);
+                        const pz = 0;
+
+                        positions.push(px, py, pz);
+                        colors.push(r, g, b);
+
+                        particlesData.push({
+                            ox: px, oy: py, 
+                            x: px, y: py, z: pz, 
+                            vx: 0, vy: 0, vz: 0, 
+                            br: brightness, 
+                            angle: Math.random() * Math.PI * 2 
+                        });
+                    }
+                }
+            }
+
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+            const material = new THREE.PointsMaterial({
+                size: parseFloat(ui.size.value),
+                map: particleTexture,
+                vertexColors: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                transparent: true,
+                opacity: 0.9
+            });
+
+            particleSystem = new THREE.Points(geometry, material);
+            scene.add(particleSystem);
+        }
+
+        // ==========================================
+        // 5. 物理模拟
+        // ==========================================
+        let time = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.01;
+            controls.update();
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersect = new THREE.Vector3();
+            raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), intersect);
+
+            if (particleSystem) {
+                const positions = particleSystem.geometry.attributes.position.array;
+                const mode = ui.mode.value;
+                const depthScale = parseInt(ui.depth.value);
+                const forceMult = parseFloat(ui.force.value);
+                const friction = 0.1; // 固定摩擦力
+
+                for (let i = 0; i < particlesData.length; i++) {
+                    const p = particlesData[i];
+                    const targetZ = p.br * depthScale;
+                    let tx = p.ox;
+                    let ty = p.oy;
+                    let tz = targetZ;
+
+                    let fx = 0, fy = 0, fz = 0;
+
+                    if (mode === 'nebula') {
+                        tx += Math.sin(time + p.angle) * 5;
+                        ty += Math.cos(time + p.angle) * 5;
+                    } 
+                    else if (mode === 'liquid') {
+                        tx += Math.sin(p.oy * 0.02 + time * 2) * 20 * forceMult;
+                        ty += Math.cos(p.ox * 0.02 + time * 2) * 20 * forceMult;
+                    }
+                    else if (mode === 'repel') {
+                        const dx = p.x - intersect.x;
+                        const dy = p.y - intersect.y;
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+                        const radius = 150 * forceMult;
+                        if (dist < radius) {
+                            const angle = Math.atan2(dy, dx);
+                            const f = (radius - dist) / radius; 
+                            fx += Math.cos(angle) * f * 20;
+                            fy += Math.sin(angle) * f * 20;
+                            fz += Math.sin(angle * 5) * f * 50; 
+                        }
+                    }
+                    else if (mode === 'magnet') {
+                        const dx = p.ox - intersect.x;
+                        const dy = p.oy - intersect.y;
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+                        if (dist > 150 * forceMult) {
+                            tx += Math.sin(p.angle + time) * 100;
+                            ty += Math.cos(p.angle + time) * 100;
+                            tz += Math.sin(p.angle) * 200;
+                        }
+                    }
+
+                    const k = 0.05; 
+                    p.vx += (tx - p.x) * k + fx;
+                    p.vy += (ty - p.y) * k + fy;
+                    p.vz += (tz - p.z) * k + fz;
+
+                    p.vx *= (1 - friction);
+                    p.vy *= (1 - friction);
+                    p.vz *= (1 - friction);
+
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.z += p.vz;
+
+                    const idx = i * 3;
+                    positions[idx] = p.x;
+                    positions[idx+1] = p.y;
+                    positions[idx+2] = p.z;
+                }
+                particleSystem.geometry.attributes.position.needsUpdate = true;
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        function resetCamera() {
+            controls.reset();
+            camera.position.set(0, 0, 800);
+            camera.lookAt(0, 0, 0);
+        }
+    </script>
+
+<!-- image-lab: back to index -->
+<a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
+<style>
+#__lab_back{position:fixed;right:14px;bottom:14px;z-index:2147483647;
+  font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
+  padding:8px 11px;border-radius:999px;text-decoration:none;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}
+#__lab_back:hover{opacity:1}
+</style>
+</body>
+</html>

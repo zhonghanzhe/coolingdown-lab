@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>CHROMETYPE-Z: 液态生物金属</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FontLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/TextGeometry.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        :root { --bg: #000; --panel: rgba(10, 10, 10, 0.85); --accent: #00ffcc; }
+        body { margin: 0; overflow: hidden; background: var(--bg); font-family: 'Segoe UI', sans-serif; color: #fff; }
+        .controls {
+            position: absolute; top: 20px; left: 20px; width: 300px;
+            background: var(--panel); border: 1px solid #333; padding: 20px;
+            border-radius: 12px; display: flex; flex-direction: column; gap: 15px;
+            backdrop-filter: blur(10px);
+        }
+        h1 { margin: 0; font-size: 1.2rem; color: var(--accent); letter-spacing: 3px; font-style: italic;}
+        label { font-size: 0.8rem; color: #888; display: flex; justify-content: space-between; }
+        input[type="text"], select, button { 
+            width: 100%; padding: 10px; background: #111; border: 1px solid #444; color: #fff; 
+            border-radius: 4px; box-sizing: border-box; margin-top: 5px;
+        }
+        input[type="range"] { width: 100%; accent-color: var(--accent); }
+        .btn-main { background: var(--accent); color: #000; font-weight: bold; border: none; cursor: pointer; }
+        .btn-main:hover { box-shadow: 0 0 15px var(--accent); }
+        #loading { position: absolute; top:50%; left:50%; transform:translate(-50%,-50%); color: var(--accent); text-transform: uppercase; letter-spacing: 2px;}
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <h1>CHROMETYPE-Z</h1>
+        <div>
+            <label>BIO-TEXT (输入文本)</label>
+            <input type="text" id="textInput" value="CYBER">
+        </div>
+        <div>
+            <label>FLUIDITY (流动速度) <span id="v-speed">1.0</span></label>
+            <input type="range" id="speed" min="0" max="3" step="0.1" value="1.0">
+        </div>
+        <div>
+            <label>DISTORTION (扭曲强度) <span id="v-dist">0.5</span></label>
+            <input type="range" id="dist" min="0" max="2.0" step="0.1" value="0.5">
+        </div>
+        <div>
+            <label>ENVIRONMENT (反射环境)</label>
+            <select id="envMap">
+                <option value="studio">Studio (冷白摄影棚)</option>
+                <option value="sunset">Sunset (金色日落)</option>
+                <option value="night">Neon City (赛博夜景)</option>
+            </select>
+        </div>
+        <div>
+            <label>METAL COLOR (金属基色)</label>
+            <input type="color" id="color" value="#ffffff">
+        </div>
+        <button class="btn-main" onclick="saveImage()">📷 CAPTURE HD</button>
+    </div>
+    <div id="loading">Forging Geometry...</div>
+    <div id="canvas-container"></div>
+
+    <script>
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050505);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000);
+        camera.position.set(0, 0, 400);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.0;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // 灯光
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(5, 10, 7);
+        scene.add(dirLight);
+
+        // 变量
+        let textMesh, textGeo, originalPositions;
+        let currentFont;
+        const fontLoader = new THREE.FontLoader();
+        const loading = document.getElementById('loading');
+
+        // 环境贴图生成器 (简单模拟)
+        function getEnvMap(type) {
+            const loader = new THREE.CubeTextureLoader();
+            const path = 'https://threejs.org/examples/textures/cube/';
+            if (type === 'sunset') return loader.load([path+'pisa/px.png', path+'pisa/nx.png', path+'pisa/py.png', path+'pisa/ny.png', path+'pisa/pz.png', path+'pisa/nz.png']);
+            if (type === 'studio') return loader.load([path+'SwedishRoyalCastle/px.jpg', path+'SwedishRoyalCastle/nx.jpg', path+'SwedishRoyalCastle/py.jpg', path+'SwedishRoyalCastle/ny.jpg', path+'SwedishRoyalCastle/pz.jpg', path+'SwedishRoyalCastle/nz.jpg']);
+            // Night 用纯色模拟
+            return null; 
+        }
+
+        const material = new THREE.MeshPhysicalMaterial({
+            color: 0xffffff, metalness: 1.0, roughness: 0.05,
+            clearcoat: 1.0, clearcoatRoughness: 0.1,
+            transmission: 0, opacity: 1
+        });
+
+        // 加载环境
+        function updateEnv() {
+            const type = document.getElementById('envMap').value;
+            if(type === 'night') {
+                scene.environment = null;
+                const spot = new THREE.PointLight(0xff00ff, 2, 500);
+                spot.position.set(100,100,100); scene.add(spot);
+                const spot2 = new THREE.PointLight(0x00ffff, 2, 500);
+                spot2.position.set(-100,-100,100); scene.add(spot2);
+            } else {
+                scene.environment = getEnvMap(type);
+            }
+        }
+        updateEnv();
+
+        // 加载字体
+        fontLoader.load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_bold.typeface.json', (font) => {
+            currentFont = font;
+            generateText();
+            loading.style.display = 'none';
+        });
+
+        function generateText() {
+            if(textMesh) scene.remove(textMesh);
+            const text = document.getElementById('textInput').value.toUpperCase();
+            
+            textGeo = new THREE.TextGeometry(text, {
+                font: currentFont, size: 60, height: 10,
+                curveSegments: 20, bevelEnabled: true,
+                bevelThickness: 3, bevelSize: 1, bevelOffset: 0, bevelSegments: 10
+            });
+            
+            textGeo.center();
+            
+            // 细分几何体以支持更好的变形
+            // TextGeometry 默认细分不够，我们不手动细分，而是依赖 bevelSegments
+            
+            // 保存原始顶点位置用于动画计算
+            originalPositions = textGeo.attributes.position.array.slice();
+
+            textMesh = new THREE.Mesh(textGeo, material);
+            scene.add(textMesh);
+        }
+
+        // UI 监听
+        document.getElementById('textInput').addEventListener('change', generateText);
+        document.getElementById('color').addEventListener('input', e => material.color.set(e.target.value));
+        document.getElementById('envMap').addEventListener('change', updateEnv);
+        document.getElementById('speed').addEventListener('input', e => document.getElementById('v-speed').innerText = e.target.value);
+        document.getElementById('dist').addEventListener('input', e => document.getElementById('v-dist').innerText = e.target.value);
+
+        // 核心：液态变形动画
+        let time = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            const speed = parseFloat(document.getElementById('speed').value);
+            const dist = parseFloat(document.getElementById('dist').value);
+            
+            time += 0.01 * speed;
+
+            if (textMesh && originalPositions) {
+                const positions = textGeo.attributes.position.array;
+                
+                for (let i = 0; i < originalPositions.length; i += 3) {
+                    const x = originalPositions[i];
+                    const y = originalPositions[i+1];
+                    const z = originalPositions[i+2];
+
+                    // 使用正弦波叠加模拟液体噪波
+                    // 这种算法比 Perlin Noise 快，适合在 JS 循环中运行
+                    const waveX = Math.sin(y * 0.05 + time) * Math.cos(z * 0.05 + time) * 5 * dist;
+                    const waveY = Math.cos(x * 0.05 + time) * Math.sin(z * 0.05 + time) * 5 * dist;
+                    const waveZ = Math.sin(x * 0.05 + time * 0.5) * 5 * dist;
+
+                    positions[i] = x + waveX;
+                    positions[i+1] = y + waveY;
+                    positions[i+2] = z + waveZ;
+                }
+                textGeo.attributes.position.needsUpdate = true;
+                textGeo.computeVertexNormals(); // 重新计算法线，让反光正确
+            }
+            
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        function saveImage() {
+            renderer.render(scene, camera);
+            const link = document.createElement('a');
+            link.download = 'chrometype-z-bio.jpg';
+            link.href = renderer.domElement.toDataURL('image/jpeg', 0.95);
+            link.click();
+        }
+    </script>
+
+<!-- image-lab: back to index -->
+<a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
+<style>
+#__lab_back{position:fixed;right:14px;bottom:14px;z-index:2147483647;
+  font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
+  padding:8px 11px;border-radius:999px;text-decoration:none;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}
+#__lab_back:hover{opacity:1}
+</style>
+</body>
+</html>

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Haze - 梦境模糊生成器</title>
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --panel: #141414;
+            --text: #e0e0e0;
+            --accent: #ff0055; /* GALA海报同款粉色 */
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            font-weight: 800;
+            letter-spacing: -1px;
+            margin-bottom: 20px;
+            background: linear-gradient(90deg, #fff, #ff0055, #6600ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .canvas-box {
+            background: #000;
+            border: 1px solid #333;
+            /* 模拟海报的边框感 */
+            padding: 20px; 
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        canvas {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .controls {
+            background: var(--panel);
+            padding: 25px;
+            border-radius: 12px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            border: 1px solid #333;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        label {
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: #888;
+            text-transform: uppercase;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
+        .buttons {
+            grid-column: 1 / -1;
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        button, .file-upload {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+
+        .btn-upload { background: #333; color: white; display: inline-block; text-align: center;}
+        .btn-gala { background: var(--accent); color: white; box-shadow: 0 0 20px rgba(255, 0, 85, 0.4); }
+        .btn-save { background: #fff; color: #000; }
+        
+        button:hover, .file-upload:hover { transform: translateY(-2px); opacity: 0.9; }
+        
+        input[type="file"] { display: none; }
+    </style>
+</head>
+<body>
+
+    <h1>DREAM HAZE // GALA STYLE</h1>
+
+    <div class="container">
+        
+        <div class="canvas-box">
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>Blur Intensity (模糊) <span id="val-blur">60px</span></label>
+                <input type="range" id="blur" min="0" max="150" value="60">
+            </div>
+
+            <div class="control-group">
+                <label>Grain / Noise (颗粒) <span id="val-noise">35</span></label>
+                <input type="range" id="noise" min="0" max="100" value="35">
+            </div>
+
+            <div class="control-group">
+                <label>Saturation (色彩) <span id="val-sat">140%</span></label>
+                <input type="range" id="sat" min="0" max="300" value="140">
+            </div>
+
+            <div class="control-group">
+                <label>Contrast (对比度) <span id="val-con">110%</span></label>
+                <input type="range" id="con" min="50" max="200" value="110">
+            </div>
+
+            <div class="buttons">
+                <label class="btn-upload file-upload">
+                    📂 上传图片
+                    <input type="file" id="upload" accept="image/*">
+                </label>
+                <button class="btn-gala" onclick="applyGalaPreset()">✨ 一键 GALA 风格</button>
+                <button class="btn-save" onclick="downloadImage()">💾 下载海报</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 控件
+        const inputs = {
+            blur: document.getElementById('blur'),
+            noise: document.getElementById('noise'),
+            sat: document.getElementById('sat'),
+            con: document.getElementById('con')
+        };
+        
+        // 数值显示
+        const labels = {
+            blur: document.getElementById('val-blur'),
+            noise: document.getElementById('val-noise'),
+            sat: document.getElementById('val-sat'),
+            con: document.getElementById('val-con')
+        };
+
+        let originalImg = null;
+        let isProcessing = false;
+
+        // 初始化画布
+        canvas.width = 800;
+        canvas.height = 600;
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#333';
+        ctx.font = '20px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText("请上传图片以开始", 400, 300);
+
+        // 监听滑块变化
+        Object.keys(inputs).forEach(key => {
+            inputs[key].addEventListener('input', (e) => {
+                labels[key].innerText = key === 'blur' || key === 'noise' ? e.target.value : e.target.value + '%';
+                if (!isProcessing) requestAnimationFrame(render);
+            });
+        });
+
+        // 上传图片
+        document.getElementById('upload').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    // 适配尺寸，最大宽度设为1200以保证性能
+                    let w = img.width;
+                    let h = img.height;
+                    const max = 1200;
+                    if (w > max) {
+                        h = h * (max / w);
+                        w = max;
+                    }
+                    canvas.width = w;
+                    canvas.height = h;
+                    originalImg = img;
+                    
+                    // 自动应用一次效果
+                    applyGalaPreset();
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // 核心渲染函数
+        function render() {
+            if (!originalImg) return;
+            isProcessing = true;
+
+            const w = canvas.width;
+            const h = canvas.height;
+            
+            // 获取当前滑块参数
+            const blurAmount = inputs.blur.value;
+            const satAmount = inputs.sat.value;
+            const conAmount = inputs.con.value;
+            const noiseAmount = parseInt(inputs.noise.value);
+
+            // 1. 清空画布
+            ctx.clearRect(0, 0, w, h);
+
+            // 2. 应用 CSS 滤镜 (模糊 + 调色)
+            // Canvas 的 filter 属性可以非常高效地处理模糊和颜色
+            ctx.filter = `blur(${blurAmount}px) saturate(${satAmount}%) contrast(${conAmount}%)`;
+            
+            // 3. 绘制图片 (这一步会带有模糊效果)
+            // 为了防止边缘模糊变透明，我们将图片稍微放大一点绘制 (clamping)
+            const pad = parseInt(blurAmount) * 2;
+            ctx.drawImage(originalImg, -pad, -pad, w + pad*2, h + pad*2);
+            
+            ctx.filter = 'none'; // 重置滤镜，否则噪点也会被模糊
+
+            // 4. 生成颗粒噪点 (Grain) - 这是质感的关键
+            if (noiseAmount > 0) {
+                // 获取当前画面像素
+                const imageData = ctx.getImageData(0, 0, w, h);
+                const data = imageData.data;
+                
+                // 遍历像素添加噪点
+                for (let i = 0; i < data.length; i += 4) {
+                    // 生成一个 -noise 到 +noise 之间的随机值
+                    const noise = (Math.random() - 0.5) * noiseAmount * 2;
+                    
+                    // 叠加到 RGB 通道
+                    data[i] = data[i] + noise;     // R
+                    data[i+1] = data[i+1] + noise; // G
+                    data[i+2] = data[i+2] + noise; // B
+                    // Alpha 不变
+                }
+                
+                // 将处理过噪点的图像放回画布
+                ctx.putImageData(imageData, 0, 0);
+            }
+
+            isProcessing = false;
+        }
+
+        // 一键 GALA 风格参数
+        function applyGalaPreset() {
+            if(!originalImg) return;
+            inputs.blur.value = 80;   // 极度模糊
+            inputs.sat.value = 160;   // 提高饱和度
+            inputs.con.value = 110;   // 稍微增加对比度
+            inputs.noise.value = 40;  // 明显的颗粒感
+            
+            // 更新文字显示
+            labels.blur.innerText = "80";
+            labels.sat.innerText = "160%";
+            labels.con.innerText = "110%";
+            labels.noise.innerText = "40";
+            
+            render();
+        }
+
+        function downloadImage() {
+            if (!originalImg) return;
+            const link = document.createElement('a');
+            link.download = 'dream-haze-poster.jpg'; // 使用 jpg 压缩体积
+            link.href = canvas.toDataURL('image/jpeg', 0.9);
+            link.click();
+        }
+    </script>
+
+<!-- image-lab: back to index -->
+<a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
+<style>
+#__lab_back{position:fixed;right:14px;bottom:14px;z-index:2147483647;
+  font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
+  padding:8px 11px;border-radius:999px;text-decoration:none;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}
+#__lab_back:hover{opacity:1}
+</style>
+</body>
+</html>

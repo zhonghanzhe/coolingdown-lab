@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TYPE-MUTANT v2.4 // 骨架版</title>
+    <style>
+        :root {
+            --bg: #050505;
+            --panel: #111;
+            --text: #eee;
+            --accent: #00ffcc;
+            --border: #333;
+            --svg-btn: #ff00ff;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 左侧控制面板 */
+        .controls {
+            width: 340px;
+            background: var(--panel);
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            flex-shrink: 0;
+            z-index: 10;
+            box-shadow: 5px 0 20px rgba(0,0,0,0.5);
+        }
+
+        h1 {
+            margin: 0 0 10px 0;
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--accent);
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 10px;
+        }
+
+        .control-group {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #222;
+        }
+
+        .control-group h3 {
+            margin: 0 0 10px 0;
+            font-size: 0.85rem;
+            color: var(--accent);
+            opacity: 0.8;
+            text-transform: uppercase;
+        }
+
+        label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            margin-bottom: 5px;
+            color: #ccc;
+            align-items: center;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent);
+            margin-bottom: 10px;
+            cursor: pointer;
+            background: #000;
+        }
+
+        input[type="text"], input[type="color"], select {
+            width: 100%;
+            background: #000;
+            border: 1px solid #333;
+            color: #fff;
+            padding: 8px;
+            border-radius: 4px;
+            box-sizing: border-box;
+            outline: none;
+        }
+        
+        /* Checkbox 样式 */
+        input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
+        select:focus, input:focus {
+            border-color: var(--accent);
+        }
+        
+        input[type="text"] {
+            font-size: 1.5rem;
+            text-align: center;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        button {
+            background: var(--accent);
+            color: #000;
+            border: none;
+            padding: 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: 0.2s;
+            margin-top: 5px;
+        }
+        button:hover {
+            box-shadow: 0 0 15px var(--accent);
+            transform: translateY(-1px);
+        }
+        
+        .btn-svg {
+            background: transparent;
+            border: 1px solid var(--svg-btn);
+            color: var(--svg-btn);
+            margin-top: 15px;
+        }
+        .btn-svg:hover {
+            background: var(--svg-btn);
+            color: #fff;
+            box-shadow: 0 0 15px var(--svg-btn);
+        }
+
+        /* 右侧展示区 */
+        .preview-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            padding: 40px;
+            gap: 40px;
+            align-items: center;
+        }
+
+        .main-preview {
+            position: relative;
+            background: #000;
+            padding: 20px;
+            border-radius: 4px;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 400px;
+            height: 400px;
+            min-width: 400px;
+            min-height: 400px;
+            flex-shrink: 0;
+            transition: filter 0.1s; 
+        }
+        
+        .main-preview canvas {
+            display: block;
+            max-width: 100%; 
+            max-height: 100%;
+        }
+
+        .section-title {
+            width: 100%;
+            max-width: 1000px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+            font-size: 0.9rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            flex-shrink: 0;
+        }
+
+        .charset-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 15px;
+            width: 100%;
+            max-width: 1000px;
+            padding-bottom: 50px;
+        }
+
+        .char-card {
+            background: #000;
+            aspect-ratio: 1;
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid #222;
+        }
+        
+        .char-card canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <h1>Type Mutant v2.4</h1>
+        
+        <div class="control-group">
+            <h3>🔲 渲染引擎 (Engine)</h3>
+            <select id="renderMode">
+                <option value="neural">🕸️ Neural (神经连线)</option>
+                <option value="liquid">💧 Liquid (液态气泡)</option>
+                <option value="pixel">👾 Pixel (复古像素)</option>
+                <option value="laser">⚡ Laser (激光扫描)</option>
+            </select>
+        </div>
+
+        <div class="control-group" style="border-color: #fff;">
+            <h3>🦴 骨架设定 (Structure)</h3>
+            <label>
+                启用描边 (Outline Mode)
+                <input type="checkbox" id="isOutline" checked>
+            </label>
+            <label>描边粗细 (Thickness) <span id="v-stroke">2</span></label>
+            <input type="range" id="strokeW" min="1" max="20" value="2">
+        </div>
+
+        <div class="control-group">
+            <h3>🔤 基础输入 (Input)</h3>
+            <label>测试字母 (Char)</label>
+            <input type="text" id="inputChar" value="R" maxlength="1">
+            <label>字体大小 (Zoom) <span id="v-zoom">45%</span></label>
+            <input type="range" id="fontSize" min="20" max="70" value="45">
+        </div>
+
+        <div class="control-group">
+            <h3>🦠 变异参数 (Mutation)</h3>
+            
+            <label>笔触/粒子大小 (Size) <span id="v-size">6</span></label>
+            <input type="range" id="pSize" min="2" max="40" value="6">
+            
+            <label>密度 (Density) <span id="v-dens">5</span></label>
+            <input type="range" id="pDens" min="3" max="20" value="5">
+
+            <label>不规则度 (Chaos) <span id="v-chaos">0.2</span></label>
+            <input type="range" id="pChaos" min="0" max="5" step="0.1" value="0.2">
+            
+            <label>液态流动 (Flow) <span id="v-flow">0</span></label>
+            <input type="range" id="pFlow" min="0" max="20" step="0.5" value="0">
+        </div>
+        
+        <div class="control-group" id="liquidControls" style="display:none;">
+            <h3>💧 液态微调 (Liquid Fine-tune)</h3>
+            <label>模糊度 (Blur) <span id="v-blur">4</span></label>
+            <input type="range" id="fBlur" min="0" max="20" value="4">
+            
+            <label>边缘硬度 (Contrast) <span id="v-cont">20</span></label>
+            <input type="range" id="fCont" min="1" max="50" value="20">
+        </div>
+
+        <div class="control-group">
+            <h3>🎨 样式 (Style)</h3>
+            <label>墨水颜色 (Color)</label>
+            <input type="color" id="inkColor" value="#00ffcc">
+            <label>背景模式</label>
+            <select id="bgMode">
+                <option value="black">黑底 (Dark Mode)</option>
+                <option value="white">白底 (Light Mode)</option>
+            </select>
+        </div>
+
+        <button onclick="generateAll()">⚡ 生成全套字符集</button>
+        <button class="btn-svg" onclick="exportSVG()">⬇️ 导出当前 SVG (AI用)</button>
+    </div>
+
+    <div class="preview-area">
+        <div class="section-title">Design Lab // 主设计台</div>
+        <div class="main-preview" id="mainCard">
+            <canvas id="mainCanvas"></canvas>
+        </div>
+        <div class="section-title">Character Set // 全套生成结果</div>
+        <div class="charset-grid" id="grid"></div>
+    </div>
+
+    <script>
+        const config = {
+            mode: 'neural', // 默认改用 neural 展示线条感
+            isOutline: true, // 默认开启描边
+            strokeWidth: 2,
+            char: 'R',
+            zoom: 0.45,
+            size: 6,      
+            chaos: 0.2,   // 混乱度降低一点，保持线条形状
+            flow: 0,
+            density: 5,   // 密度提高精度
+            color: '#00ffcc',
+            bg: 'black',
+            blur: 4,      
+            contrast: 20  
+        };
+
+        const mainCanvas = document.getElementById('mainCanvas');
+        const mainCtx = mainCanvas.getContext('2d');
+        const grid = document.getElementById('grid');
+        
+        // UI 绑定
+        const inputs = {
+            mode: document.getElementById('renderMode'),
+            char: document.getElementById('inputChar'),
+            zoom: document.getElementById('fontSize'),
+            size: document.getElementById('pSize'),
+            chaos: document.getElementById('pChaos'),
+            flow: document.getElementById('pFlow'),
+            dens: document.getElementById('pDens'),
+            color: document.getElementById('inkColor'),
+            bgMode: document.getElementById('bgMode'),
+            blur: document.getElementById('fBlur'),
+            contrast: document.getElementById('fCont'),
+            // 新增
+            isOutline: document.getElementById('isOutline'),
+            strokeW: document.getElementById('strokeW')
+        };
+
+        Object.keys(inputs).forEach(k => {
+            if(inputs[k].type === 'checkbox') {
+                inputs[k].addEventListener('change', (e) => {
+                    config[k] = e.target.checked;
+                    updateMainPreview();
+                });
+            } else {
+                inputs[k].addEventListener('input', (e) => {
+                    let val = e.target.value;
+                    if(['size','dens','zoom','blur','contrast','strokeW'].includes(k)) val = parseInt(val);
+                    if(k === 'chaos' || k === 'flow') val = parseFloat(val);
+                    
+                    if(k === 'zoom') config.zoom = val / 100;
+                    else if(k === 'strokeW') config.strokeWidth = val;
+                    else config[k] = val;
+                    
+                    if(document.getElementById(`v-${k}`)) {
+                        const displayVal = k === 'zoom' ? val + '%' : val;
+                        document.getElementById(`v-${k}`).innerText = displayVal;
+                    }
+                    updateMainPreview();
+                });
+            }
+        });
+
+        inputs.char.addEventListener('input', (e) => {
+            config.char = e.target.value.toUpperCase() || 'A';
+            updateMainPreview();
+        });
+
+        inputs.mode.addEventListener('change', (e) => {
+            config.mode = e.target.value;
+            const liquidControls = document.getElementById('liquidControls');
+            if(e.target.value === 'liquid') {
+                liquidControls.style.display = 'block';
+            } else {
+                liquidControls.style.display = 'none';
+            }
+            updateMainPreview();
+        });
+
+        // 核心采样器 (支持描边)
+        function sampleFont(char, width, height) {
+            const osC = document.createElement('canvas');
+            osC.width = width;
+            osC.height = height;
+            const ctx = osC.getContext('2d');
+
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, width, height); 
+            
+            const safetyFactor = 0.75; 
+            const fontSize = width * config.zoom * safetyFactor; 
+            ctx.font = `bold ${fontSize}px Arial, Helvetica, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // 核心修改：判断是填充还是描边
+            if (config.isOutline) {
+                ctx.strokeStyle = '#fff';
+                // 描边粗细与画布尺寸相关
+                // 在采样阶段，为了保证能取到点，线条不能太细，可以比最终效果稍粗一点
+                // 这里我们直接用用户设置的粗细，但至少为1
+                ctx.lineWidth = Math.max(1, config.strokeWidth * (width/400)); 
+                ctx.strokeText(char, width / 2, height / 2);
+            } else {
+                ctx.fillStyle = '#fff';
+                ctx.fillText(char, width / 2, height / 2);
+            }
+
+            const idata = ctx.getImageData(0, 0, width, height);
+            const data = idata.data;
+            const particles = [];
+            const step = Math.max(1, config.density); 
+            
+            for (let y = 0; y < height; y += step) {
+                for (let x = 0; x < width; x += step) {
+                    const i = (y * width + x) * 4;
+                    // 红色通道 > 64 就算有内容 (描边由于抗锯齿可能比较暗，所以阈值调低)
+                    if (data[i] > 64) {
+                        particles.push({ x: x, y: y });
+                    }
+                }
+            }
+            return particles;
+        }
+
+        function getDeformedParticles(particles) {
+            return particles.map(p => {
+                const noiseX = Math.sin(p.y * 0.1) + Math.cos(p.x * 0.1); 
+                const noiseY = Math.cos(p.y * 0.1) - Math.sin(p.x * 0.1);
+                let dx = (noiseX * config.chaos * 10);
+                let dy = (noiseY * config.chaos * 10);
+
+                if (config.flow > 0) {
+                    dx += Math.sin(p.y * 0.05) * config.flow * 2;
+                    dy += Math.cos(p.x * 0.05) * config.flow * 2;
+                }
+                return { x: p.x + dx, y: p.y + dy };
+            });
+        }
+
+        // Canvas 渲染
+        function renderParticles(ctx, particles, width, height, scale = 1, containerElement = null) {
+            ctx.clearRect(0, 0, width, height);
+            ctx.fillStyle = config.bg === 'white' ? '#fff' : '#000';
+            ctx.fillRect(0, 0, width, height);
+            ctx.fillStyle = config.color;
+            ctx.strokeStyle = config.color;
+
+            if (containerElement) {
+                if (config.mode === 'liquid') {
+                    containerElement.style.filter = `contrast(${config.contrast})`;
+                    ctx.canvas.style.filter = `blur(${config.blur}px)`;
+                } else {
+                    containerElement.style.filter = 'none';
+                    ctx.canvas.style.filter = 'none';
+                }
+                containerElement.style.backgroundColor = config.bg === 'white' ? '#fff' : '#000';
+            }
+
+            const deformed = getDeformedParticles(particles);
+
+            if (config.mode === 'liquid') {
+                deformed.forEach(p => {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, config.size * scale, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            } 
+            else if (config.mode === 'pixel') {
+                deformed.forEach(p => {
+                    ctx.fillRect(p.x, p.y, config.size * scale, config.size * scale);
+                });
+            }
+            else if (config.mode === 'laser') {
+                deformed.forEach(p => {
+                    ctx.fillRect(p.x, p.y, config.size * 3 * scale, Math.max(1, config.size * 0.2 * scale));
+                });
+            }
+            else if (config.mode === 'neural') {
+                ctx.lineWidth = Math.max(0.5, config.size * 0.1 * scale);
+                deformed.forEach(p => {
+                     // 神经模式下，如果描边很细，可以不画节点圆点，只画线，或者画很小的点
+                     ctx.beginPath();
+                     ctx.arc(p.x, p.y, config.size * 0.3 * scale, 0, Math.PI*2);
+                     ctx.fill();
+                });
+                const connectDist = config.size * 3 * scale;
+                for(let i=0; i<deformed.length; i++) {
+                    for(let j=1; j<4; j++) {
+                        if (i+j < deformed.length) {
+                            const p1 = deformed[i];
+                            const p2 = deformed[i+j];
+                            const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+                            if (dist < connectDist) {
+                                ctx.beginPath();
+                                ctx.moveTo(p1.x, p1.y);
+                                ctx.lineTo(p2.x, p2.y);
+                                ctx.stroke();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function exportSVG() {
+            const w = 400; 
+            const h = 400;
+            const rawParticles = sampleFont(config.char, w, h);
+            const deformed = getDeformedParticles(rawParticles);
+            
+            let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">`;
+            svgContent += `<rect width="100%" height="100%" fill="${config.bg === 'white' ? '#fff' : '#000'}"/>`;
+            
+            const col = config.color;
+
+            if (config.mode === 'pixel') {
+                deformed.forEach(p => {
+                    svgContent += `<rect x="${p.x}" y="${p.y}" width="${config.size}" height="${config.size}" fill="${col}"/>`;
+                });
+            }
+            else if (config.mode === 'laser') {
+                deformed.forEach(p => {
+                    svgContent += `<rect x="${p.x}" y="${p.y}" width="${config.size * 3}" height="${Math.max(1, config.size * 0.2)}" fill="${col}"/>`;
+                });
+            }
+            else if (config.mode === 'liquid') {
+                deformed.forEach(p => {
+                    svgContent += `<circle cx="${p.x}" cy="${p.y}" r="${config.size}" fill="${col}"/>`;
+                });
+            }
+            else if (config.mode === 'neural') {
+                deformed.forEach(p => {
+                    svgContent += `<circle cx="${p.x}" cy="${p.y}" r="${config.size * 0.3}" fill="${col}"/>`;
+                });
+                const connectDist = config.size * 3;
+                for(let i=0; i<deformed.length; i++) {
+                    for(let j=1; j<4; j++) {
+                        if (i+j < deformed.length) {
+                            const p1 = deformed[i];
+                            const p2 = deformed[i+j];
+                            const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+                            if (dist < connectDist) {
+                                svgContent += `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="${col}" stroke-width="${Math.max(0.5, config.size * 0.1)}"/>`;
+                            }
+                        }
+                    }
+                }
+            }
+
+            svgContent += `</svg>`;
+            
+            const blob = new Blob([svgContent], {type: 'image/svg+xml'});
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.download = `type-mutant-${config.mode}-${config.char}.svg`;
+            link.href = url;
+            link.click();
+        }
+
+        function updateMainPreview() {
+            const w = 400;
+            const h = 400;
+            mainCanvas.width = w;
+            mainCanvas.height = h;
+            const card = document.getElementById('mainCard');
+            const particles = sampleFont(config.char, w, h);
+            renderParticles(mainCtx, particles, w, h, 1.0, card);
+        }
+
+        function generateAll() {
+            grid.innerHTML = '';
+            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split('');
+            const cardSize = 150; 
+            const scale = cardSize / 400; 
+
+            chars.forEach(char => {
+                const card = document.createElement('div');
+                card.className = 'char-card';
+                card.style.backgroundColor = config.bg === 'white' ? '#fff' : '#000';
+
+                const cvs = document.createElement('canvas');
+                cvs.width = cardSize;
+                cvs.height = cardSize;
+                const ctx = cvs.getContext('2d');
+                
+                const bigParticles = sampleFont(char, 400, 400);
+                const scaledParticles = bigParticles.map(p => ({
+                    x: p.x * scale,
+                    y: p.y * scale
+                }));
+
+                renderParticles(ctx, scaledParticles, cardSize, cardSize, scale, card);
+                card.appendChild(cvs);
+                grid.appendChild(card);
+            });
+        }
+
+        updateMainPreview();
+        setTimeout(generateAll, 500);
+
+    </script>
+
+<!-- image-lab: back to index -->
+<a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
+<style>
+#__lab_back{position:fixed;right:14px;bottom:14px;z-index:2147483647;
+  font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
+  padding:8px 11px;border-radius:999px;text-decoration:none;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}
+#__lab_back:hover{opacity:1}
+</style>
+</body>
+</html>

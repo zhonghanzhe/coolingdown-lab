@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CHROMETYPE-X: 液态金属排版机</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FontLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/TextGeometry.js"></script>
+    <style>
+        :root { --bg: #000; --panel: rgba(20, 20, 20, 0.8); --text: #eee; --accent: #00ffcc; }
+        body { margin: 0; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; }
+        .controls {
+            position: absolute; top: 20px; left: 20px; width: 300px;
+            background: var(--panel); backdrop-filter: blur(10px); padding: 20px;
+            border-radius: 12px; border: 1px solid #333; display: flex; flex-direction: column; gap: 15px;
+        }
+        h1 { margin: 0; font-size: 1.2rem; color: var(--accent); letter-spacing: 2px; }
+        input, select, button {
+            width: 100%; padding: 10px; background: #111; border: 1px solid #444;
+            color: #fff; border-radius: 6px; box-sizing: border-box; margin-top: 5px;
+        }
+        input[type=range] { accent-color: var(--accent); cursor: pointer; }
+        label { font-size: 0.8rem; color: #ccc; }
+        .btn-main { background: var(--accent); color: #000; font-weight: bold; border: none; cursor: pointer; }
+        #loading { position: absolute; top:50%; left:50%; transform:translate(-50%,-50%); color: var(--accent); }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <h1>CHROMETYPE-X</h1>
+        
+        <div>
+            <label>输入文本 (Text)</label>
+            <input type="text" id="textInput" value="LIQUID METAL">
+        </div>
+        <div>
+            <label>字体风格 (Font Style)</label>
+            <select id="fontStyle">
+                <option value="helvetiker_bold.typeface.json">Helvetiker (经典粗体)</option>
+                <option value="optimer_bold.typeface.json">Optimer (优雅)</option>
+                <option value="gentilis_bold.typeface.json">Gentilis (现代)</option>
+            </select>
+        </div>
+        <div>
+            <label>金属粗糙度 (Roughness) <span id="v-rough">0.1</span></label>
+            <input type="range" id="roughness" min="0" max="0.5" step="0.01" value="0.1">
+        </div>
+        <div>
+            <label>金属颜色 (Color)</label>
+            <input type="color" id="color" value="#ffffff">
+        </div>
+         <div>
+            <label>导出尺寸 (Export Size)</label>
+            <select id="exportSize">
+                <option value="1">1x (预览)</option>
+                <option value="2">2x (高清)</option>
+                <option value="4">4K (超清)</option>
+            </select>
+            <button class="btn-main" onclick="saveImage()" style="margin-top:10px;">📷 保存 JPG</button>
+        </div>
+    </div>
+    <div id="loading">正在锻造金属...</div>
+    <div id="canvas-container"></div>
+
+    <script>
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        // 创建一个程序化生成的环境贴图，用于反射
+        const envMap = new THREE.CubeTextureLoader()
+            .setPath( 'https://threejs.org/examples/textures/cube/SwedishRoyalCastle/' )
+            .load( [ 'px.jpg', 'nx.jpg', 'py.jpg', 'ny.jpg', 'pz.jpg', 'nz.jpg' ] );
+        scene.background = new THREE.Color(0x000000);
+        scene.environment = envMap;
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000);
+        camera.position.set(0, 0, 400);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.0;
+        container.appendChild(renderer.domElement);
+
+        // 添加灯光
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+        scene.add(ambientLight);
+        const pointLight = new THREE.PointLight(0xffffff, 1);
+        camera.add(pointLight);
+        scene.add(camera);
+
+        let textMesh;
+        let currentFont;
+        const fontLoader = new THREE.FontLoader();
+        const loading = document.getElementById('loading');
+
+        // UI 绑定
+        const ui = {
+            text: document.getElementById('textInput'),
+            font: document.getElementById('fontStyle'),
+            rough: document.getElementById('roughness'),
+            color: document.getElementById('color')
+        };
+
+        // 核心材质：物理金属材质
+        const material = new THREE.MeshPhysicalMaterial({
+            color: 0xffffff,
+            metalness: 1.0, // 完全金属
+            roughness: 0.1, // 非常光滑
+            envMapIntensity: 1.5, // 反射强度
+            clearcoat: 1.0, // 清漆层，增加通透感
+            clearcoatRoughness: 0.05
+        });
+
+        function loadFont() {
+            loading.style.display = 'block';
+            const fontName = ui.font.value;
+            // 使用 Three.js 官方示例的字体 CDN
+            const url = `https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/${fontName}`;
+            
+            fontLoader.load(url, (font) => {
+                currentFont = font;
+                createText();
+                loading.style.display = 'none';
+            });
+        }
+
+        function createText() {
+            if (textMesh) scene.remove(textMesh);
+            if (!currentFont) return;
+
+            const text = ui.text.value.toUpperCase();
+            const geometry = new THREE.TextGeometry(text, {
+                font: currentFont,
+                size: 60,
+                height: 20, // 厚度
+                curveSegments: 20, // 圆滑度
+                bevelEnabled: true, // 斜角，增加立体感
+                bevelThickness: 2,
+                bevelSize: 1.5,
+                bevelOffset: 0,
+                bevelSegments: 10
+            });
+
+            geometry.center(); // 居中
+
+            textMesh = new THREE.Mesh(geometry, material);
+            scene.add(textMesh);
+        }
+
+        // 事件监听
+        ui.text.addEventListener('input', createText);
+        ui.font.addEventListener('change', loadFont);
+        ui.rough.addEventListener('input', (e) => {
+            material.roughness = parseFloat(e.target.value);
+            document.getElementById('v-rough').innerText = e.target.value;
+        });
+        ui.color.addEventListener('input', (e) => material.color.set(e.target.value));
+
+        // 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+            if (textMesh) {
+                // 缓慢旋转，展示反射效果
+                textMesh.rotation.y += 0.005;
+                textMesh.rotation.x = Math.sin(Date.now() * 0.001) * 0.1;
+            }
+            renderer.render(scene, camera);
+        }
+        
+        loadFont(); // 初始化
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // 高清导出
+        function saveImage() {
+            const multiplier = parseInt(document.getElementById('exportSize').value);
+            renderer.setSize(window.innerWidth * multiplier, window.innerHeight * multiplier);
+            renderer.render(scene, camera);
+            const link = document.createElement('a');
+            link.download = `chrometype-${multiplier}x.jpg`;
+            link.href = renderer.domElement.toDataURL('image/jpeg', 0.95);
+            link.click();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+
+<!-- image-lab: back to index -->
+<a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
+<style>
+#__lab_back{position:fixed;right:14px;bottom:14px;z-index:2147483647;
+  font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
+  padding:8px 11px;border-radius:999px;text-decoration:none;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}
+#__lab_back:hover{opacity:1}
+</style>
+</body>
+</html>

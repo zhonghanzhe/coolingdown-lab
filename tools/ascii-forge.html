@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASCII-FORGE: 分区字符艺术引擎 (终极版)</title>
+    <style>
+        :root {
+            --bg: #121212; --panel: #1e1e1e; --text: #ccc; --accent: #00d2ff;
+            --shadow-col: #ff4757; --mid-col: #2ed573; --high-col: #ffa502;
+            --svg-col: #ff00ff; /* SVG 按钮专用色 */
+            --jpg-col: #00ff9d; /* JPG 按钮专用色 */
+        }
+        body {
+            font-family: 'Segoe UI', Roboto, sans-serif; background-color: var(--bg); color: var(--text);
+            margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center;
+        }
+        h1 { margin: 0 0 20px 0; text-transform: uppercase; letter-spacing: 4px; color: var(--accent); }
+        
+        .main-container {
+            display: flex; gap: 20px; width: 100%; max-width: 1400px; align-items: flex-start;
+        }
+
+        /* 控制面板 */
+        .controls-panel {
+            flex: 0 0 350px; background: var(--panel); padding: 20px; border-radius: 8px;
+            max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .control-group { margin-bottom: 25px; border-bottom: 1px solid #333; padding-bottom: 15px; }
+        .control-group h3 { margin: 0 0 15px 0; font-size: 1rem; color: var(--accent); }
+        label { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.85rem; color: #aaa; align-items: center;}
+        input[type=range], select, input[type=color], input[type=text] {
+            width: 100%; background: #111; border: 1px solid #333; color: var(--text); padding: 8px; border-radius: 4px; margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+        input[type=range] { padding: 0; accent-color: var(--accent); }
+        
+        /* 按钮样式 */
+        .btn {
+            width: 100%; padding: 12px; border: 1px solid; border-radius: 4px;
+            font-weight: bold; cursor: pointer; transition: 0.2s; text-align: center; display: block; margin-bottom: 10px;
+            background: rgba(255,255,255,0.05);
+        }
+        .btn-load { color: var(--accent); border-color: var(--accent); }
+        .btn-load:hover { background: var(--accent); color: #000; }
+        
+        .btn-render { background: var(--accent); color: #000; border-color: var(--accent); margin-top: 20px;}
+        .btn-render:hover { box-shadow: 0 0 15px var(--accent); }
+
+        /* SVG 按钮样式 */
+        .btn-svg { color: var(--svg-col); border-color: var(--svg-col); }
+        .btn-svg:hover { background: var(--svg-col); color: #000; box-shadow: 0 0 15px var(--svg-col); }
+
+        /* JPG 按钮样式 */
+        .btn-jpg { color: var(--jpg-col); border-color: var(--jpg-col); }
+        .btn-jpg:hover { background: var(--jpg-col); color: #000; box-shadow: 0 0 15px var(--jpg-col); }
+
+        input[type="file"] { display: none; }
+
+        /* 分区设置标题颜色 */
+        .zone-title-s { color: var(--shadow-col) !important; }
+        .zone-title-m { color: var(--mid-col) !important; }
+        .zone-title-h { color: var(--high-col) !important; }
+
+        /* 输出区域 */
+        .output-container {
+            flex: 1; background: #000; overflow: auto; border-radius: 8px;
+            min-height: 600px; display: flex; justify-content: center; align-items: center;
+            border: 2px solid #333; position: relative;
+        }
+        /* ASCII 显示核心样式 */
+        #asciiOutput {
+            font-family: 'Courier New', Courier, monospace; /* 必须是等宽字体 */
+            white-space: pre; /* 保留空格和换行 */
+            font-size: 12px; line-height: 10px; /* 调整字间距和行高以匹配比例 */
+            letter-spacing: 0px;
+            font-weight: bold;
+        }
+        /* 隐藏的 canvas 用于处理数据 */
+        #processCanvas { display: none; }
+        
+        /* 状态提示 */
+        .status-bar { margin-top: 10px; font-size: 0.8rem; color: #666; text-align: center; }
+
+        /* 加载遮罩 */
+        #loadingOverlay {
+            position: absolute; top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center;
+            color: var(--accent); font-weight: bold; z-index: 100; font-size: 1.2rem; flex-direction: column; gap:10px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>ASCII-FORGE <span style="font-size:0.5em">/// ULTIMATE</span></h1>
+
+    <div class="main-container">
+        <div class="controls-panel">
+            <label class="btn btn-load">
+                📂 载入图片 (LOAD IMAGE)
+                <input type="file" id="uploadInput" accept="image/*">
+            </label>
+
+            <div class="control-group">
+                <h3>全局设置 (Global Config)</h3>
+                <label>分辨率/密度 (Density): <span id="val-res">150宽</span></label>
+                <input type="range" id="resolution" min="50" max="300" value="150">
+                <label>背景颜色 (Background):</label>
+                <input type="color" id="bgColor" value="#000000">
+            </div>
+
+            <div class="control-group">
+                <h3>分区阈值 (Zoning Thresholds)</h3>
+                <label>暗部界限 (Shadow Limit): <span id="val-th1">60</span></label>
+                <input type="range" id="threshold1" min="0" max="255" value="60" style="accent-color: var(--shadow-col);">
+                <label>亮部界限 (Highlight Start): <span id="val-th2">180</span></label>
+                <input type="range" id="threshold2" min="0" max="255" value="180" style="accent-color: var(--high-col);">
+            </div>
+
+            <div class="control-group" style="border-color: var(--shadow-col);">
+                <h3 class="zone-title-s">🟫 暗部区域 (Shadows)</h3>
+                <label>字符集 (Charset):</label>
+                <select id="s_charset">
+                    <option value="blocks">█ 实心块 (Blocks)</option>
+                    <option value="dense">@%# 密集 (Dense)</option>
+                    <option value="matrix">ﾊﾐﾋ Matrix</option>
+                    <option value="shapes">◆●■▲ 几何 (Shapes)</option>
+                    <option value="minimal">.· 极简点 (Dots)</option>
+                    <option value="custom">自定义 (下面输入)</option>
+                </select>
+                <input type="text" id="s_custom_chars" placeholder="输入自定义字符..." value="@#">
+                <label>颜色模式 (Color Mode):</label>
+                <select id="s_colormode">
+                    <option value="original">🎨 原始色彩 (Original)</option>
+                    <option value="fixed">🟥 固定颜色 (Fixed)</option>
+                </select>
+                <input type="color" id="s_fixedcolor" value="#ff0000">
+            </div>
+
+            <div class="control-group" style="border-color: var(--mid-col);">
+                <h3 class="zone-title-m">🟩 中间调区域 (Midtones)</h3>
+                <label>字符集 (Charset):</label>
+                <select id="m_charset">
+                    <option value="matrix" selected>ﾊﾐﾋ Matrix</option>
+                    <option value="blocks">█ 实心块 (Blocks)</option>
+                    <option value="standard">标准ASCII梯度</option>
+                    <option value="shapes">◆●■▲ 几何 (Shapes)</option>
+                    <option value="minimal">.· 极简点 (Dots)</option>
+                    <option value="custom">自定义</option>
+                </select>
+                <input type="text" id="m_custom_chars" placeholder="输入自定义字符..." value="+-=*:">
+                <label>颜色模式 (Color Mode):</label>
+                <select id="m_colormode">
+                    <option value="original" selected>🎨 原始色彩 (Original)</option>
+                    <option value="fixed">🟩 固定颜色 (Fixed)</option>
+                </select>
+                <input type="color" id="m_fixedcolor" value="#00ff00">
+            </div>
+
+            <div class="control-group" style="border-color: var(--high-col);">
+                <h3 class="zone-title-h">🟨 亮部区域 (Highlights)</h3>
+                <label>字符集 (Charset):</label>
+                <select id="h_charset">
+                    <option value="shapes" selected>◆●■▲ 几何 (Shapes)</option>
+                    <option value="blocks">█ 实心块 (Blocks)</option>
+                    <option value="standard">标准ASCII梯度</option>
+                    <option value="minimal">.· 极简点 (Dots)</option>
+                    <option value="empty">空格 (透明)</option>
+                    <option value="custom">自定义</option>
+                </select>
+                <input type="text" id="h_custom_chars" placeholder="输入自定义字符..." value="★☆✨.">
+                <label>颜色模式 (Color Mode):</label>
+                <select id="h_colormode">
+                    <option value="original">🎨 原始色彩 (Original)</option>
+                    <option value="fixed" selected>🟨 固定颜色 (Fixed)</option>
+                </select>
+                <input type="color" id="h_fixedcolor" value="#ffff00">
+            </div>
+
+            <button class="btn btn-render" onclick="renderASCII()">⚡ 生成 / 刷新 (RENDER)</button>
+            
+            <div class="control-group" style="border-color: var(--jpg-col);">
+                <h3 style="color:var(--jpg-col)">🖼️ 导出图片 (Export JPG)</h3>
+                <label>尺寸 (Size):</label>
+                <select id="jpgSize">
+                    <option value="1">1x (预览尺寸)</option>
+                    <option value="2">2x (高清)</option>
+                    <option value="4">4x (超清)</option>
+                    <option value="8">8x (印刷级)</option>
+                </select>
+                <button class="btn btn-jpg" onclick="exportJPG()">💾 保存 JPG</button>
+            </div>
+
+            <button class="btn btn-svg" onclick="exportSVG()">🖨️ 导出矢量 SVG</button>
+            
+            <div class="status-bar" id="statusBar">Ready.</div>
+        </div>
+
+        <div class="output-container" id="outputBox">
+            <div id="loadingOverlay">
+                <span>Rendering High-Res Image...</span>
+                <span style="font-size:0.8em; color:#fff;">请稍候...</span>
+            </div>
+            <pre id="asciiOutput">请先载入图片...</pre>
+        </div>
+    </div>
+    
+    <canvas id="processCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('processCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const asciiOutput = document.getElementById('asciiOutput');
+        const outputBox = document.getElementById('outputBox');
+        const statusBar = document.getElementById('statusBar');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        let sourceImage = null;
+
+        // 字符集定义
+        const CHARSETS = {
+            'standard': ' .`^",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$',
+            'dense': '░▒▓█',
+            'blocks': '█',
+            'minimal': ' ·.',
+            'matrix': 'ﾊﾐﾋビムー・. : ',
+            'shapes': '✚✖✦★◆●■▲▼◀▶',
+            'empty': ' '
+        };
+
+        // UI 绑定更新
+        function setStatus(msg) { statusBar.innerText = msg; }
+
+        document.getElementById('resolution').addEventListener('input', (e) => document.getElementById('val-res').innerText = e.target.value + "宽");
+        document.getElementById('threshold1').addEventListener('input', (e) => {
+             let val = parseInt(e.target.value);
+             let val2 = parseInt(document.getElementById('threshold2').value);
+             if(val >= val2) document.getElementById('threshold2').value = val + 1;
+             document.getElementById('val-th1').innerText = val;
+        });
+        document.getElementById('threshold2').addEventListener('input', (e) => {
+             let val = parseInt(e.target.value);
+             let val1 = parseInt(document.getElementById('threshold1').value);
+             if(val <= val1) document.getElementById('threshold1').value = val - 1;
+             document.getElementById('val-th2').innerText = val;
+        });
+        document.getElementById('bgColor').addEventListener('input', (e) => {
+            outputBox.style.backgroundColor = e.target.value;
+            asciiOutput.style.backgroundColor = e.target.value;
+        });
+
+        // 图片加载
+        document.getElementById('uploadInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            setStatus("Loading image...");
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                sourceImage = new Image();
+                sourceImage.onload = () => {
+                    renderASCII();
+                    setStatus("Image loaded. Click Render if needed.");
+                };
+                sourceImage.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // 获取指定区域的配置
+        function getZoneConfig(prefix) {
+            const charsetType = document.getElementById(`${prefix}_charset`).value;
+            let chars = CHARSETS[charsetType];
+            if (charsetType === 'custom') {
+                chars = document.getElementById(`${prefix}_custom_chars`).value || '?';
+            }
+            return {
+                chars: chars,
+                colorMode: document.getElementById(`${prefix}_colormode`).value,
+                fixedColor: document.getElementById(`${prefix}_fixedcolor`).value
+            };
+        }
+
+        // 核心渲染函数
+        function renderASCII() {
+            if (!sourceImage) return;
+            asciiOutput.innerText = "Processing...";
+            setStatus("Rendering...");
+
+            setTimeout(() => {
+                const targetWidth = parseInt(document.getElementById('resolution').value);
+                const scaleFactor = targetWidth / sourceImage.width;
+                const targetHeight = Math.floor(sourceImage.height * scaleFactor * 0.55); 
+
+                canvas.width = targetWidth;
+                canvas.height = targetHeight;
+                ctx.drawImage(sourceImage, 0, 0, targetWidth, targetHeight);
+
+                const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+                const data = imageData.data;
+                const w = targetWidth;
+                const h = targetHeight;
+
+                const th1 = parseInt(document.getElementById('threshold1').value);
+                const th2 = parseInt(document.getElementById('threshold2').value);
+                
+                const configS = getZoneConfig('s');
+                const configM = getZoneConfig('m');
+                const configH = getZoneConfig('h');
+
+                let htmlOutput = "";
+
+                for (let y = 0; y < h; y++) {
+                    for (let x = 0; x < w; x++) {
+                        const i = (y * w + x) * 4;
+                        const r = data[i];
+                        const g = data[i+1];
+                        const b = data[i+2];
+                        const brightness = (0.299 * r + 0.587 * g + 0.114 * b);
+
+                        let zoneConfig, zoneBrightnessRatio;
+                        if (brightness <= th1) {
+                            zoneConfig = configS;
+                            zoneBrightnessRatio = brightness / Math.max(1, th1); 
+                        } else if (brightness <= th2) {
+                            zoneConfig = configM;
+                            zoneBrightnessRatio = (brightness - th1) / Math.max(1, (th2 - th1));
+                        } else {
+                            zoneConfig = configH;
+                            zoneBrightnessRatio = (brightness - th2) / Math.max(1, (255 - th2));
+                        }
+
+                        const chars = zoneConfig.chars;
+                        const charIndex = Math.floor(zoneBrightnessRatio * (chars.length - 1));
+                        const char = chars[Math.max(0, Math.min(chars.length -1, charIndex))];
+
+                        let finalColor;
+                        if (zoneConfig.colorMode === 'original') {
+                            finalColor = `rgb(${r},${g},${b})`;
+                        } else {
+                            finalColor = zoneConfig.fixedColor;
+                        }
+
+                        if (char === ' ') {
+                             htmlOutput += char;
+                        } else {
+                             htmlOutput += `<span style="color:${finalColor}">${char}</span>`;
+                        }
+                    }
+                    htmlOutput += "\n";
+                }
+
+                asciiOutput.innerHTML = htmlOutput;
+                setStatus("Render Complete.");
+            }, 50);
+        }
+
+        // =========================================
+        // SVG 矢量导出功能
+        // =========================================
+        function exportSVG() {
+            if (!sourceImage) return alert("请先载入图片并生成！");
+            const asciiContainer = document.getElementById('asciiOutput');
+            if (asciiContainer.innerText === 'Processing...' || asciiContainer.innerText.startsWith('请先')) return alert("请先点击生成(RENDER)！");
+
+            setStatus("Generatng SVG Vector Data...");
+
+            setTimeout(() => {
+                const w = canvas.width;
+                const h = canvas.height;
+                const bgColor = document.getElementById('bgColor').value;
+                
+                const fontSize = 12; 
+                const charWidth = fontSize * 0.6; 
+                const lineHeight = fontSize * 1.0; 
+                
+                const svgWidth = (w * charWidth).toFixed(2);
+                const svgHeight = (h * lineHeight).toFixed(2);
+
+                let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${svgWidth} ${svgHeight}" style="background-color:${bgColor}">`;
+                svgContent += `<style>text { font-family: 'Courier New', monospace; font-weight: bold; white-space: pre; }</style>`;
+                
+                const rows = asciiContainer.innerHTML.split('\n');
+                const colorGroups = {};
+
+                for (let y = 0; y < rows.length; y++) {
+                    const rowHtml = rows[y];
+                    const regex = /<span style="color:([^"]+)">([^<]+)<\/span>|([^<]+)/g;
+                    let match;
+                    let x = 0;
+
+                    while ((match = regex.exec(rowHtml)) !== null) {
+                        let color, chars;
+                        if (match[1]) { 
+                            color = match[1];
+                            chars = match[2];
+                        } else { 
+                            color = "currentColor"; 
+                            chars = match[3];
+                        }
+                        
+                        for (let i = 0; i < chars.length; i++) {
+                            const char = chars[i];
+                            if (char !== ' ') { 
+                                if (!colorGroups[color]) colorGroups[color] = [];
+                                const posX = (x * charWidth).toFixed(2);
+                                const posY = (y * lineHeight + fontSize * 0.8).toFixed(2); 
+                                const safeChar = char.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                                colorGroups[color].push(`<text x="${posX}" y="${posY}">${safeChar}</text>`);
+                            }
+                            x++;
+                        }
+                    }
+                }
+
+                for (let color in colorGroups) {
+                    const fillAttr = color === "currentColor" ? `fill="#888"` : `fill="${color}"`;
+                    svgContent += `<g ${fillAttr}>${colorGroups[color].join('')}</g>`;
+                }
+
+                svgContent += '</svg>';
+
+                const blob = new Blob([svgContent], {type: 'image/svg+xml'});
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.download = 'ascii-art-vector.svg';
+                link.href = url;
+                link.click();
+                setStatus("SVG Exported Successfully!");
+            }, 50);
+        }
+
+        // =========================================
+        // 新增：JPG 导出功能 (带尺寸选择)
+        // =========================================
+        function exportJPG() {
+            if (!sourceImage) return alert("请先载入图片并生成！");
+            const asciiContainer = document.getElementById('asciiOutput');
+            if (asciiContainer.innerText === 'Processing...' || asciiContainer.innerText.startsWith('请先')) return alert("请先点击生成(RENDER)！");
+
+            loadingOverlay.style.display = 'flex';
+            setStatus("Rendering High-Res JPG...");
+
+            setTimeout(() => {
+                // 1. 获取导出倍率
+                const scale = parseInt(document.getElementById('jpgSize').value);
+                
+                // 2. 基础尺寸
+                const w = canvas.width; // 字符列数
+                const h = canvas.height; // 字符行数
+                
+                // 字体设置
+                const baseFontSize = 12;
+                const fontSize = baseFontSize * scale;
+                const charWidth = fontSize * 0.6;
+                const lineHeight = fontSize * 1.0;
+                
+                // 计算目标画布尺寸
+                const targetWidth = Math.ceil(w * charWidth);
+                const targetHeight = Math.ceil(h * lineHeight);
+
+                // 创建离屏 Canvas
+                const offCanvas = document.createElement('canvas');
+                offCanvas.width = targetWidth;
+                offCanvas.height = targetHeight;
+                const offCtx = offCanvas.getContext('2d');
+
+                // 3. 绘制背景
+                const bgColor = document.getElementById('bgColor').value;
+                offCtx.fillStyle = bgColor;
+                offCtx.fillRect(0, 0, targetWidth, targetHeight);
+
+                // 4. 设置字体
+                offCtx.font = `bold ${fontSize}px "Courier New", monospace`;
+                offCtx.textBaseline = 'alphabetic'; // 类似SVG定位
+
+                // 5. 解析并绘制 (复用 SVG 的解析逻辑)
+                const rows = asciiContainer.innerHTML.split('\n');
+                
+                for (let y = 0; y < rows.length; y++) {
+                    const rowHtml = rows[y];
+                    const regex = /<span style="color:([^"]+)">([^<]+)<\/span>|([^<]+)/g;
+                    let match;
+                    let x = 0;
+
+                    while ((match = regex.exec(rowHtml)) !== null) {
+                        let color, chars;
+                        if (match[1]) { 
+                            color = match[1];
+                            chars = match[2];
+                        } else { 
+                            color = "#888"; // 默认色
+                            chars = match[3];
+                        }
+                        
+                        offCtx.fillStyle = color;
+                        
+                        for (let i = 0; i < chars.length; i++) {
+                            const char = chars[i];
+                            // 跳过空格不绘制
+                            if (char !== ' ') { 
+                                const posX = x * charWidth;
+                                // Y轴修正: baseline 在底部，所以 y * lineHeight + fontSize * 0.8
+                                const posY = y * lineHeight + fontSize * 0.8;
+                                offCtx.fillText(char, posX, posY);
+                            }
+                            x++;
+                        }
+                    }
+                }
+
+                // 6. 导出
+                const link = document.createElement('a');
+                link.download = `ascii-art-${scale}x.jpg`;
+                link.href = offCanvas.toDataURL('image/jpeg', 0.9);
+                link.click();
+                
+                loadingOverlay.style.display = 'none';
+                setStatus("JPG Exported!");
+            }, 100); // 留出时间渲染loading界面
+        }
+    </script>
+
+<!-- image-lab: back to index -->
+<a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
+<style>
+#__lab_back{position:fixed;right:14px;bottom:14px;z-index:2147483647;
+  font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
+  padding:8px 11px;border-radius:999px;text-decoration:none;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}
+#__lab_back:hover{opacity:1}
+</style>
+</body>
+</html>

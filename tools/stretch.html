@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omni-Stretch Engine - 全能像素拉伸</title>
+    <style>
+        /* --- 保持极客风格 --- */
+        :root {
+            --bg: #010101; --panel: #111; --text: #eee;
+            --c-pure: #00aaff; /* 纯净蓝 */
+            --c-rgb: #ff0055;  /* 赛博粉 */
+            --c-vert: #9900ff; /* 垂直紫 */
+            --c-zoom: #ff9900; /* 放射橙 */
+            --c-warp: #00ff99; /* 液态绿 */
+        }
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: var(--bg); color: var(--text);
+            margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+        }
+        h1 {
+            margin-top: 25px; letter-spacing: 4px; font-style: italic;
+            background: linear-gradient(to right, var(--c-pure), var(--c-rgb), var(--c-zoom));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .container {
+            display: flex; flex-direction: column; align-items: center;
+            gap: 20px; padding: 20px; width: 95%; max-width: 1200px;
+        }
+        .canvas-container {
+            border: 1px solid #333; background: #000; overflow: hidden;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.05);
+            max-width: 100%;
+        }
+        canvas { display: block; max-width: 100%; height: auto; }
+
+        /* 控制面板网格布局 */
+        .controls {
+            background-color: var(--panel); padding: 20px; border: 1px solid #333;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px; width: 100%; box-sizing: border-box;
+        }
+        
+        /* 按钮通用样式 */
+        button, .file-btn {
+            padding: 12px; border: 1px solid #444; background: rgba(255,255,255,0.02);
+            color: #aaa; font-weight: bold; cursor: pointer; transition: all 0.2s;
+            text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        button:hover { transform: translateY(-2px); color: #fff; }
+        input[type="file"] { display: none; }
+
+        /* 各个功能的专属颜色 */
+        .btn-pure { border-color: var(--c-pure); color: var(--c-pure); }
+        .btn-pure:hover { background: var(--c-pure); box-shadow: 0 0 15px var(--c-pure); }
+
+        .btn-rgb { border-color: var(--c-rgb); color: var(--c-rgb); }
+        .btn-rgb:hover { background: var(--c-rgb); box-shadow: 0 0 15px var(--c-rgb); }
+
+        .btn-vert { border-color: var(--c-vert); color: var(--c-vert); }
+        .btn-vert:hover { background: var(--c-vert); box-shadow: 0 0 15px var(--c-vert); }
+
+        .btn-zoom { border-color: var(--c-zoom); color: var(--c-zoom); }
+        .btn-zoom:hover { background: var(--c-zoom); box-shadow: 0 0 15px var(--c-zoom); }
+
+        .btn-warp { border-color: var(--c-warp); color: var(--c-warp); }
+        .btn-warp:hover { background: var(--c-warp); box-shadow: 0 0 15px var(--c-warp); }
+
+        .btn-reset { border-color: #666; grid-column: span 2; }
+        .btn-save { border-color: #eee; color: #eee; grid-column: span 2; }
+
+        .status { margin-top: 5px; color: #666; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+
+    <h1>OMNI-STRETCH ENGINE</h1>
+
+    <div class="container">
+        <div class="controls">
+            <label class="file-btn" style="grid-column: span 4; border-color: #eee; color:#eee;">
+                [ 📂 上传图片 LOAD IMAGE ]
+                <input type="file" id="uploadInput" accept="image/*">
+            </label>
+            
+            <button class="btn-pure" onclick="applyPureStretch()">🟦 纯净拉伸</button>
+            <button class="btn-rgb" onclick="applyRGBStretch()">🟥 RGB色散拉伸</button>
+            <button class="btn-vert" onclick="applyVerticalMelt()">🟪 垂直熔化</button>
+            <button class="btn-zoom" onclick="applyHyperspace()">🟧 超空间跳跃</button>
+            <button class="btn-warp" onclick="applyLiquidWarp()">🟩 液态扭曲</button>
+            
+            <button class="btn-reset" onclick="resetImage()">🔄 重置 (RESET)</button>
+            <button class="btn-save" onclick="downloadImage()">💾 保存 (SAVE)</button>
+        </div>
+
+        <div class="status" id="statusText">等待指令...</div>
+
+        <div class="canvas-container">
+            <canvas id="editorCanvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('editorCanvas');
+        const ctx = canvas.getContext('2d');
+        // 优化：某些效果需要更平滑的绘图设置
+        ctx.imageSmoothingEnabled = true; 
+
+        let originalImageData = null; // 保存原始像素数据的副本
+
+        function setStatus(msg) { document.getElementById('statusText').innerText = `> ${msg}`; }
+        function getIndex(x, y, w) { return (y * w + x) * 4; }
+
+        // --- 图片加载 ---
+        document.getElementById('uploadInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            setStatus("正在载入...");
+            const img = new Image();
+            img.onload = () => {
+                // 限制尺寸以保证性能
+                let w = img.width, h = img.height;
+                const max = 1000;
+                if (w > max || h > max) {
+                    const ratio = w / h;
+                    if (w > h) { w = max; h = max / ratio; } else { h = max; w = max * ratio; }
+                }
+                canvas.width = w; canvas.height = h;
+                ctx.drawImage(img, 0, 0, w, h);
+                // 深度克隆一份原始数据用于重置
+                originalImageData = ctx.getImageData(0, 0, w, h);
+                setStatus("引擎已就绪.");
+            };
+            img.src = URL.createObjectURL(file);
+        });
+
+        // ==========================================
+        // 核心功能区 (The Extra Sauce)
+        // ==========================================
+
+        // 1. 纯净拉伸 (Pure Stretch) - 不带色散
+        function applyPureStretch() {
+            if (!originalImageData) return; setStatus("执行: 纯净水平拉伸...");
+            setTimeout(() => {
+                const w = canvas.width, h = canvas.height;
+                const currentData = ctx.getImageData(0,0,w,h);
+                const data = currentData.data;
+                
+                for (let y = 0; y < h; y++) {
+                    for (let x = 0; x < w - 1; x++) {
+                        const i = getIndex(x, y, w);
+                        // 亮度触发阈值
+                        if ((data[i]+data[i+1]+data[i+2])/3 > 150 && Math.random() > 0.8) {
+                            const stretchLen = Math.random() * (w/3) + 20;
+                            // 锁定当前颜色
+                            const R=data[i], G=data[i+1], B=data[i+2];
+                            for (let k = 1; k < stretchLen && x+k < w; k++) {
+                                const targetI = getIndex(x+k, y, w);
+                                // 直接复制，不偏移
+                                data[targetI] = R; data[targetI+1] = G; data[targetI+2] = B;
+                            }
+                            x += Math.floor(stretchLen/1.5); // 跳过以加速
+                        }
+                    }
+                }
+                ctx.putImageData(currentData, 0, 0);
+            }, 20);
+        }
+
+        // 2. RGB色散拉伸 (Chromatic Stretch) - 之前的赛博版
+        function applyRGBStretch() {
+            if (!originalImageData) return; setStatus("执行: RGB色散拉伸...");
+            setTimeout(() => {
+                const w = canvas.width, h = canvas.height;
+                const currentData = ctx.getImageData(0,0,w,h);
+                const data = currentData.data;
+                for (let y = 0; y < h; y++) {
+                    for (let x = 0; x < w; x++) {
+                        const i = getIndex(x, y, w);
+                        if ((data[i]+data[i+1]+data[i+2])/3 > 160 && Math.random() > 0.85) {
+                            const stretchLen = Math.random() * (w/2) + 30;
+                            const sR=data[i], sG=data[i+1], sB=data[i+2];
+                            for (let k = 1; k < stretchLen && x+k < w; k++) {
+                                const tI = getIndex(x+k, y, w);
+                                // RGB 偏移技巧
+                                data[tI] = data[getIndex(Math.max(0,x-3),y,w)]; // R取左
+                                data[tI+1] = sG; // G不变
+                                data[tI+2] = data[getIndex(Math.min(w-1,x+k+3),y,w)]; // B取右
+                            }
+                            x += Math.floor(stretchLen/2);
+                        }
+                    }
+                }
+                ctx.putImageData(currentData, 0, 0);
+            }, 20);
+        }
+
+        // 3. 垂直熔化 (Vertical Melt)
+        function applyVerticalMelt() {
+            if (!originalImageData) return; setStatus("执行: 垂直数据熔化...");
+            setTimeout(() => {
+                const w = canvas.width, h = canvas.height;
+                const currentData = ctx.getImageData(0,0,w,h);
+                const data = currentData.data;
+                // 按列遍历，而不是按行
+                for (let x = 0; x < w; x++) {
+                    for (let y = 0; y < h; y++) {
+                        const i = getIndex(x, y, w);
+                        // 触发条件：寻找色彩边缘
+                        const prevY = Math.max(0, y-1);
+                        const prevI = getIndex(x, prevY, w);
+                        const colorDiff = Math.abs(data[i] - data[prevI]) + Math.abs(data[i+1] - data[prevI+1]);
+                        
+                        if (colorDiff > 50 && Math.random() > 0.9) {
+                             const dropLen = Math.random() * (h/2) + 50;
+                             const R=data[i], G=data[i+1], B=data[i+2];
+                             // 向下复制
+                             for (let k = 1; k < dropLen && y+k < h; k++) {
+                                 const tI = getIndex(x, y+k, w);
+                                 data[tI] = R; data[tI+1] = G; data[tI+2] = B;
+                                 // 稍微变暗一点，模拟重力阴影
+                                 if(k%10===0) { R*=0.95; G*=0.95; B*=0.95; }
+                             }
+                             y += Math.floor(dropLen/1.5);
+                        }
+                    }
+                }
+                ctx.putImageData(currentData, 0, 0);
+            }, 20);
+        }
+
+        // 4. 超空间跳跃 (Hyperspace Zoom) - 使用Canvas变换实现
+        function applyHyperspace() {
+            if (!originalImageData) return; setStatus("执行: 超空间引擎启动...");
+            const w = canvas.width, h = canvas.height;
+            // 创建一个临时Canvas来保存当前画面
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = w; tempCanvas.height = h;
+            tempCanvas.getContext('2d').drawImage(canvas, 0, 0);
+
+            // 叠加层数
+            const layers = 15;
+            ctx.globalCompositeOperation = 'screen'; // 使用滤色模式混合，越叠越亮
+
+            for(let i = 1; i <= layers; i++) {
+                // 透明度递减
+                ctx.globalAlpha = 1.0 - (i / layers) * 0.8; 
+                // 缩放比例递增
+                const scale = 1 + (i * 0.05);
+                
+                // 计算居中缩放的坐标
+                const newW = w * scale;
+                const newH = h * scale;
+                const offsetX = (w - newW) / 2;
+                const offsetY = (h - newH) / 2;
+
+                // 绘制放大的图像层
+                ctx.drawImage(tempCanvas, offsetX, offsetY, newW, newH);
+            }
+            // 恢复默认设置
+            ctx.globalAlpha = 1.0;
+            ctx.globalCompositeOperation = 'source-over';
+        }
+
+        // 5. 液态扭曲 (Liquid Warp)
+        function applyLiquidWarp() {
+            if (!originalImageData) return; setStatus("执行: 液态力场扭曲...");
+             const w = canvas.width, h = canvas.height;
+             const sourceData = ctx.getImageData(0,0,w,h);
+             const outputData = ctx.createImageData(w,h);
+             
+             // 参数：频率和幅度
+             const freqY = Math.random() * 0.05 + 0.02; // Y轴波浪频率
+             const ampX = Math.random() * 30 + 20;      // X轴扭曲幅度
+             const freqX = Math.random() * 0.05 + 0.01; // X轴波浪频率
+             const ampY = Math.random() * 15 + 5;       // Y轴扭曲幅度
+
+             for (let y = 0; y < h; y++) {
+                 // 计算每一行的X偏移
+                 const offsetX = Math.sin(y * freqY) * ampX;
+                 for (let x = 0; x < w; x++) {
+                     // 计算每一列的Y偏移
+                     const offsetY = Math.cos(x * freqX) * ampY;
+                     
+                     // 目标源坐标（带小数）
+                     let srcX = x + offsetX;
+                     let srcY = y + offsetY;
+                     
+                     // 简单的边界限制和取整采样
+                     srcX = Math.min(w-1, Math.max(0, Math.floor(srcX)));
+                     srcY = Math.min(h-1, Math.max(0, Math.floor(srcY)));
+                     
+                     const sIdx = getIndex(srcX, srcY, w);
+                     const tIdx = getIndex(x, y, w);
+                     
+                     outputData.data[tIdx] = sourceData.data[sIdx];
+                     outputData.data[tIdx+1] = sourceData.data[sIdx+1];
+                     outputData.data[tIdx+2] = sourceData.data[sIdx+2];
+                     outputData.data[tIdx+3] = 255;
+                 }
+             }
+             ctx.putImageData(outputData, 0, 0);
+        }
+
+
+        // 通用功能
+        function resetImage() {
+            if (!originalImageData) return;
+            // 恢复到最初上传时的状态
+            ctx.putImageData(originalImageData, 0, 0);
+            setStatus("画布已重置。");
+        }
+
+        function downloadImage() {
+            if (!originalImageData) return;
+            const link = document.createElement('a');
+            link.download = 'omni-stretch-result.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+    </script>
+
+<!-- image-lab: back to index -->
+<a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
+<style>
+#__lab_back{position:fixed;right:14px;bottom:14px;z-index:2147483647;
+  font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
+  padding:8px 11px;border-radius:999px;text-decoration:none;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}
+#__lab_back:hover{opacity:1}
+</style>
+</body>
+</html>
