@@ -11,16 +11,15 @@
 <style>
   :root { --bg:#f8f8f6; --fg:#111110; --dim:#6e6e68; --line:#d8d8d4; }
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { position:relative; background:var(--bg); color:var(--fg);
+  body { background:var(--bg); color:var(--fg);
     font-family:"IBM Plex Mono","SF Mono",ui-monospace,Menlo,"PingFang SC",monospace; min-height:100vh;
     -webkit-font-smoothing:antialiased; }
   a { color:inherit; }
 
   header { position:relative; overflow:hidden; min-height:88vh; padding:56px 40px 28px; border-bottom:1px solid var(--line);
     display:flex; flex-wrap:wrap; align-items:flex-end; align-content:flex-end; justify-content:space-between; gap:24px; }
-  #swirlBox { position:absolute; inset:0; z-index:6; overflow:hidden; pointer-events:none; }
-  #swirl { position:absolute; left:0; top:0; width:100%; display:block; pointer-events:none;
-    -webkit-mask-image:linear-gradient(to bottom,#000 90%,transparent); mask-image:linear-gradient(to bottom,#000 90%,transparent); }
+  header > :not(#heat) { position:relative; z-index:1; }
+  #heat { position:absolute; inset:0; width:100%; height:100%; display:block; pointer-events:none; }
   h1 { font-size:clamp(44px,8vw,112px); line-height:.95; letter-spacing:-.02em; font-weight:300; }
   h1 .word { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
   h1 #sub { display:block; font-size:.8rem; line-height:1.6; letter-spacing:.05em; font-weight:400; color:var(--dim); margin-top:0; }
@@ -68,8 +67,8 @@
 </head>
 <body>
 
-<div id="swirlBox" aria-hidden="true"><canvas id="swirl"></canvas></div>
 <header>
+  <canvas id="heat" aria-hidden="true"></canvas>
   <h1><span class="word">COOLINGDOWN LAB</span><span id="sub">图像实验室 · 图片处理程序合集</span></h1>
   <div class="meta">
     <b id="count"></b><br>
@@ -290,40 +289,56 @@ CARDS.forEach(c => {
   el.addEventListener("mouseleave", () => { cancelAnimationFrame(raf); });
 });
 
-/* ---------- 顶部粒子字：平时聚成 COOLINGDOWN LAB 并在周围浮动；鼠标进入字的范围，整个词慢慢散开，
-   一部分又大又虚的粒子飘到下面的项目上。近大虚、远小实 ---------- */
+/* ---------- 顶部热成像字：COOLINGDOWN LAB 是一块正在冷却的热源，色阶同 THERMAL VISION LAB 的 Ironbow。
+   字在小范围内不规则游动拉伸，鼠标靠近时像放大镜一样局部放大 ---------- */
 (async () => {
-  const header = document.querySelector("header"), cv = document.getElementById("swirl");
+  const header = document.querySelector("header"), cv = document.getElementById("heat");
   const gl = cv.getContext("webgl", { alpha: true, premultipliedAlpha: true, antialias: false });
   if (!gl) return;
   const FONT = '"Redaction 70", Georgia, serif', LINES = ["COOLINGDOWN", "LAB"];
   try { await document.fonts.load(`400 100px "Redaction 70"`, "COOLINGDOWN LAB"); } catch (_) {}
 
-  const VS = `
-    precision highp float;
-    attribute vec3 pos;
-    attribute vec4 look;        // 颜色 rgb, 粒子大小
-    uniform vec2 res;
-    uniform float dpr;
-    varying vec3 vCol; varying float vBlur, vAlpha;
-    const float PERSP = 900.0;
-    void main() {
-      float s = PERSP / (PERSP - min(pos.z, PERSP * 0.8));
-      vec2 p = res * 0.5 + (pos.xy - res * 0.5) * s;
-      gl_Position = vec4(p.x / res.x * 2.0 - 1.0, 1.0 - p.y / res.y * 2.0, 0.0, 1.0);
-      float blur = smoothstep(15.0, 430.0, pos.z);   // 只有靠近屏幕才发虚
-      gl_PointSize = clamp(look.a * s * (1.0 + 26.0 * blur), 1.0, 190.0) * dpr;
-      vBlur = blur; vCol = look.rgb;
-      vAlpha = mix(0.95, 0.1, pow(blur, 0.45));
-    }`;
+  const VS = `attribute vec2 a; void main() { gl_Position = vec4(a, 0.0, 1.0); }`;
   const FS = `
-    precision mediump float;
-    varying vec3 vCol; varying float vBlur, vAlpha;
+    precision highp float;
+    uniform sampler2D sharp, soft;   // sharp: 字形 a；soft: r 近处余热, g 远处余热
+    uniform vec2 res, mouse;
+    uniform float t, lens, dpr, k, R;
+    float hash(vec2 q) { return fract(sin(dot(q, vec2(127.1, 311.7))) * 43758.5453); }
+    float n(vec2 p) {
+      vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
+    }
+    vec3 ironbow(float v) {          // 与 thermal 工具的 Ironbow 相同
+      vec3 a = vec3(0.125, 0.0, 0.549), b = vec3(0.8, 0.0, 0.8), c = vec3(1.0, 0.0, 0.0), d = vec3(1.0, 0.8, 0.0), e = vec3(1.0);
+      if (v < 0.4) return mix(a, b, smoothstep(0.2, 0.4, v));
+      if (v < 0.6) return mix(b, c, (v - 0.4) / 0.2);
+      if (v < 0.8) return mix(c, d, (v - 0.6) / 0.2);
+      return mix(d, e, (v - 0.8) / 0.2);
+    }
     void main() {
-      float d = length(gl_PointCoord - 0.5) * 2.0;
-      float edge = 1.0 - smoothstep(1.0 - mix(0.3, 1.0, vBlur), 1.0, d);
-      float al = mix(edge, edge * edge * edge, sqrt(vBlur)) * vAlpha;   // 越虚边缘越散
-      gl_FragColor = vec4(vCol * al, al);
+      vec2 p = vec2(gl_FragCoord.x, res.y * dpr - gl_FragCoord.y) / dpr;
+      /* 放大镜 */
+      vec2 d = p - mouse;
+      float m = smoothstep(R, 0.0, length(d)) * lens;
+      p = mouse + d / (1.0 + 1.05 * m);
+      /* 不规则游动：大尺度拉伸 + 小尺度扭动，幅度本身也在变 */
+      vec2 q = p / k;
+      float amp = 0.55 + 0.9 * n(q / 420.0 + t * 0.05);
+      vec2 w = vec2(n(q / 190.0 + vec2(t * 0.13, 0.0)), n(q / 190.0 + vec2(7.0, t * 0.11))) - 0.5;
+      w *= 17.0 * amp;
+      w += (vec2(n(q / 60.0 + vec2(3.0, t * 0.2)), n(q / 60.0 + vec2(t * 0.17, 9.0))) - 0.5) * 3.5;
+      w += vec2(sin(q.y * 0.017 + t * 0.33) * 3.0, sin(q.x * 0.009 - t * 0.27) * 3.5);
+      vec2 uv = (p + w * k) / res;
+      /* 温度：字芯最热，向外冷却，再叠一层缓慢起伏的温差 */
+      float s = texture2D(sharp, uv).a;
+      vec4 so = texture2D(soft, uv);
+      float T = s * 0.56 + so.r * 0.30 + so.g * 0.22;
+      T += (n(q / 130.0 + t * 0.07) - 0.5) * 0.24 * smoothstep(0.05, 0.5, T);
+      T = mix(T, floor(T * 16.0 + 0.5) / 16.0, 0.5 * smoothstep(0.18, 0.34, T));    // 高温区的等温线色带
+      T = clamp(T, 0.0, 0.95);
+      float al = smoothstep(0.02, 0.34, T);
+      gl_FragColor = vec4(ironbow(T) * al, al);
     }`;
   const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return o; };
   const prog = gl.createProgram();
@@ -331,22 +346,44 @@ CARDS.forEach(c => {
   gl.linkProgram(prog);
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return;
   gl.useProgram(prog);
-  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.bindAttribLocation(prog, 0, "a"); gl.linkProgram(prog); gl.useProgram(prog);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
   gl.clearColor(0, 0, 0, 0);
-  const posBuf = gl.createBuffer(), lookBuf = gl.createBuffer();
-  const lPos = gl.getAttribLocation(prog, "pos"), lLook = gl.getAttribLocation(prog, "look");
-  gl.enableVertexAttribArray(lPos); gl.enableVertexAttribArray(lLook);
-  const uRes = gl.getUniformLocation(prog, "res"), uDpr = gl.getUniformLocation(prog, "dpr");
+  const U = n => gl.getUniformLocation(prog, n);
+  const uRes = U("res"), uMouse = U("mouse"), uT = U("t"), uLens = U("lens"), uDpr = U("dpr"), uK = U("k"), uR = U("R");
+  gl.uniform1i(U("sharp"), 0); gl.uniform1i(U("soft"), 1);
+  const tex = unit => {
+    const o = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, o);
+    [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
+     [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]].forEach(([a, b]) => gl.texParameteri(gl.TEXTURE_2D, a, b));
+    return o;
+  };
+  tex(0); tex(1);
 
-  const PALETTE = [[255,61,142],[255,61,142],[255,92,168],[255,92,168],[255,133,196],[150,84,255],[178,120,255]];
-  let N = 0, P, V, T, R, A, home, W = 0, H = 0, heroH = 0, reach = 120, rects = [], laidW = 0;
-  // P/V: x y z，T: 散开时相对归位点的目标，R: 每个粒子的差异，A: 平时浮动幅度，home: x y
+  /* 三次盒式模糊，近似高斯 */
+  const blur = (src, w, h, r) => {
+    let a = Float32Array.from(src), b = new Float32Array(w * h);
+    const line = (n, get, set) => {
+      let sum = 0;
+      for (let i = -r; i <= r; i++) sum += get(Math.min(n - 1, Math.max(0, i)));
+      for (let i = 0; i < n; i++) {
+        set(i, sum / (2 * r + 1));
+        sum += get(Math.min(n - 1, i + r + 1)) - get(Math.max(0, i - r));
+      }
+    };
+    for (let pass = 0; pass < 3; pass++) {
+      for (let y = 0; y < h; y++) line(w, i => a[y * w + i], (i, v) => { b[y * w + i] = v; });
+      for (let x = 0; x < w; x++) line(h, i => b[i * w + x], (i, v) => { a[i * w + x] = v; });
+    }
+    return a;
+  };
 
-  /* 把字画到离屏画布，再按网格取样得到每个粒子的归位点 */
+  let W = 0, H = 0, rects = [], lensR = 180, laidW = 0;
   const layout = () => {
-    const dpr = Math.min(devicePixelRatio || 1, 2);
-    heroH = header.offsetHeight;
-    cv.style.height = heroH + innerHeight + "px";
+    const dpr = Math.min(devicePixelRatio || 1, 1.5);
     W = cv.clientWidth; H = cv.clientHeight; laidW = W;
     cv.width = W * dpr; cv.height = H * dpr;
     gl.viewport(0, 0, cv.width, cv.height);
@@ -355,8 +392,9 @@ CARDS.forEach(c => {
     const top = header.getBoundingClientRect().top;
     const boxTop = Math.min(...[header.querySelector("#sub"), header.querySelector(".meta")].map(e => e.getBoundingClientRect().top)) - top;
     const pad = parseFloat(getComputedStyle(header).paddingLeft);
-    const off = document.createElement("canvas"); off.width = W; off.height = heroH;
+    const off = document.createElement("canvas"); off.width = cv.width; off.height = cv.height;
     const g = off.getContext("2d", { willReadFrequently: true });
+    g.scale(dpr, dpr);
     g.font = `400 100px ${FONT}`;
     const wide = Math.max(...LINES.map(l => g.measureText(l).width));
     const LEAD = .92, size = Math.min((W - pad * 2) / wide * 100, (boxTop - 40) / (LINES.length * LEAD));
@@ -364,64 +402,40 @@ CARDS.forEach(c => {
     rects = LINES.map((l, i) => {
       const y = boxTop - 28 - (LINES.length - 1 - i) * size * LEAD - size * .08;
       g.fillText(l, pad, y);
-      return [pad - 24, y - size * .85 - 24, pad + g.measureText(l).width + 24, y + 24];
+      return [pad, y - size * .85, pad + g.measureText(l).width, y];
     });
-    const img = g.getImageData(0, 0, W, heroH).data;
+    gl.uniform1f(uK, size / 175);
+    lensR = Math.max(90, size * 1.05); gl.uniform1f(uR, lensR);
 
-    const step = Math.max(1.4, size / 85);
-    const pts = [];
-    for (let y = 0; y < heroH; y += step) for (let x = 0; x < W; x += step)
-      if (img[((y | 0) * W + (x | 0)) * 4 + 3] > 120) pts.push(x + (Math.random() - .5) * step * .3, y + (Math.random() - .5) * step * .3);
-    N = pts.length / 2; reach = Math.max(70, size * .75);
-    home = new Float32Array(pts);
-    P = new Float32Array(N * 3); V = new Float32Array(N * 3); T = new Float32Array(N * 3);
-    R = new Float32Array(N); A = new Float32Array(N);
-    const look = new Float32Array(N * 4);
-    for (let i = 0; i < N; i++) {
-      P[i * 3] = Math.random() * W; P[i * 3 + 1] = Math.random() * heroH; P[i * 3 + 2] = Math.random() * 300 - 150;
-      R[i] = Math.random();
-      A[i] = Math.random() < .07 ? (8 + Math.random() * 34) * Math.min(1, size / 170) : 1.2;   // 少量粒子在字的周围浮动
-      const c = PALETTE[Math.random() * PALETTE.length | 0];
-      look.set([c[0] / 255, c[1] / 255, c[2] / 255, step * (1.1 + Math.random() * .5)], i * 4);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, off);
+
+    /* 余热用低分辨率算 */
+    const sw = Math.max(2, W >> 2), sh2 = Math.max(2, H >> 2);
+    const small = document.createElement("canvas"); small.width = sw; small.height = sh2;
+    const sg = small.getContext("2d", { willReadFrequently: true });
+    sg.drawImage(off, 0, 0, sw, sh2);
+    const px = sg.getImageData(0, 0, sw, sh2).data, mask = new Float32Array(sw * sh2);
+    for (let i = 0; i < mask.length; i++) mask[i] = px[i * 4 + 3] / 255;
+    const near = blur(mask, sw, sh2, Math.max(1, Math.round(size * .012)));
+    const far = blur(mask, sw, sh2, Math.max(2, Math.round(size * .035)));
+    const rgba = new Uint8Array(sw * sh2 * 4);
+    for (let i = 0; i < mask.length; i++) {
+      rgba[i * 4] = Math.min(255, near[i] * 300); rgba[i * 4 + 1] = Math.min(255, far[i] * 340); rgba[i * 4 + 3] = 255;
     }
-    gl.bindBuffer(gl.ARRAY_BUFFER, lookBuf); gl.bufferData(gl.ARRAY_BUFFER, look, gl.STATIC_DRAW);
-    gl.vertexAttribPointer(lLook, 4, gl.FLOAT, false, 0, 0);
-    gl.bindBuffer(gl.ARRAY_BUFFER, posBuf); gl.bufferData(gl.ARRAY_BUFFER, P, gl.DYNAMIC_DRAW);
-    gl.vertexAttribPointer(lPos, 3, gl.FLOAT, false, 0, 0);
-    scattered = false;
+    gl.activeTexture(gl.TEXTURE1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, sw, sh2, 0, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
   };
-
-  /* 进入字的范围：给每个粒子定一个散开目标 */
-  const scatter = (mx, my) => {
-    const bigEvery = Math.max(2, Math.round(N / (W < 700 ? 200 : 520)));   // 大虚粒子数量固定，手机和高分屏都不至于太重
-    for (let i = 0, a = 0, h = 0; i < N; i++, a += 3, h += 2) {
-      const r = Math.random(), big = i % bigEvery === 0, mid = !big && r < .14;
-      const ang = Math.atan2(home[h + 1] - my, home[h] - mx) + (Math.random() - .5) * 1.8;
-      const dist = 90 + Math.random() ** 2 * Math.max(W, heroH) * .6;
-      if (big && Math.random() < .5) {        // 飘到下面的项目上
-        T[a] = Math.random() * W - home[h];
-        T[a + 1] = heroH + Math.random() * (H * .92 - heroH) - home[h + 1];
-        T[a + 2] = 380 + Math.random() * 240;
-      } else {
-        T[a] = Math.cos(ang) * dist;
-        T[a + 1] = Math.sin(ang) * dist * .75;
-        T[a + 2] = big ? 300 + Math.random() * 320 : mid ? 70 + Math.random() * 220 : -Math.random() * 320;
-      }
-      const d = Math.hypot(home[h] - mx, home[h + 1] - my) || 1;
-      V[a] += (home[h] - mx) / d * Math.random() * 2; V[a + 1] += (home[h + 1] - my) / d * Math.random() * 2;
-    }
-  };
-
-  let scattered = false, cx = -1e4, cy = -1e4;
   layout();
   let rt = 0;
   addEventListener("resize", () => {
     // 手机地址栏伸缩只改高度，不重排；有鼠标的设备改窗口高度要重排
-    if (cv.clientWidth === laidW && (!matchMedia("(hover:hover)").matches || header.offsetHeight === heroH)) return;
+    if (cv.clientWidth === laidW && (!matchMedia("(hover:hover)").matches || cv.clientHeight === H)) return;
     clearTimeout(rt); rt = setTimeout(layout, 200);
   });
 
   /* 鼠标 / 手指 */
+  let cx = -1e4, cy = -1e4, lx = 0, ly = 0, ls = 0;
   const point = e => { cx = e.clientX; cy = e.clientY; };
   const away = () => { cx = cy = -1e4; };
   addEventListener("pointermove", point, { passive: true });
@@ -430,49 +444,23 @@ CARDS.forEach(c => {
   addEventListener("pointercancel", away, { passive: true });
   document.documentElement.addEventListener("pointerleave", away);
 
-  const stepPhysics = (t, mx, my) => {
-    for (let i = 0, a = 0, h = 0; i < N; i++, a += 3, h += 2) {
-      const r = R[i];
-      let tx, ty, tz, k;
-      if (scattered) {          // 散开：很慢地飘向目标，到了也继续缓缓游动
-        const w = 18 + r * 46, p = t * (.00022 + r * .00022);
-        tx = home[h] + T[a] + Math.sin(p + i) * w;
-        ty = home[h + 1] + T[a + 1] + Math.cos(p * 1.2 + i * 1.3) * w;
-        tz = T[a + 2];
-        k = .00022 + r * .00028;
-        const dx = P[a] - mx, dy = P[a + 1] - my, d2 = dx * dx + dy * dy;
-        if (d2 < reach * reach) {
-          const d = Math.sqrt(d2) || 1, f = (1 - d / reach) * .12;
-          V[a] += dx / d * f; V[a + 1] += dy / d * f;
-        }
-      } else {                  // 平时：回到字上，并在归位点周围浮动
-        const m = A[i], loose = m > 2, p = t * (.0005 + r * .0006);
-        tx = home[h] + Math.sin(p + i * 1.7) * m;
-        ty = home[h + 1] + Math.cos(p * 1.13 + i * 2.3) * m;
-        tz = loose ? 25 + Math.sin(p * .8 + i) * 25 : 0;
-        k = .0006 + r * .001;
-      }
-      V[a] += (tx - P[a]) * k; V[a + 1] += (ty - P[a + 1]) * k; V[a + 2] += (tz - P[a + 2]) * k;
-      V[a] *= .94; V[a + 1] *= .94; V[a + 2] *= .94;
-      P[a] += V[a]; P[a + 1] += V[a + 1]; P[a + 2] += V[a + 2];
-    }
-  };
-
-  let visible = true, raf = 0, last = 0, acc = 0;
+  let visible = true, raf = 0;
   const frame = now => {
     raf = 0;
     if (!visible || document.hidden) return;
-    const b = cv.getBoundingClientRect(), mx = cx - b.left, my = cy - b.top;
-    const inside = cx > -1e3 && rects.some(q => mx > q[0] && mx < q[2] && my > q[1] && my < q[3]);
-    if (inside && !scattered) { scattered = true; scatter(mx, my); }
-    else if (!inside && scattered) scattered = false;
-    acc = Math.min(acc + (now - last), 50); last = now;
-    while (acc >= 16.6) { stepPhysics(now, mx, my); acc -= 16.6; }   // 高刷屏上物理速度不变
-    gl.bindBuffer(gl.ARRAY_BUFFER, posBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, P);
-    gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.POINTS, 0, N);
+    const b = cv.getBoundingClientRect(), mx = cx - b.left, my = cy - b.top, on = cx > -1e3;
+    /* 鼠标到字的距离：靠近时放大镜才出现 */
+    let dist = 1e9;
+    if (on) for (const q of rects) dist = Math.min(dist, Math.hypot(Math.max(q[0] - mx, 0, mx - q[2]), Math.max(q[1] - my, 0, my - q[3])));
+    const want = on ? Math.max(0, Math.min(1, 1 - dist / (lensR * .6))) : 0;
+    ls += (want - ls) * .08;
+    if (on) { const e = ls < .02 ? 1 : .14; lx += (mx - lx) * e; ly += (my - ly) * e; }
+    gl.uniform1f(uT, now / 1000 + 20);
+    gl.uniform2f(uMouse, lx, ly); gl.uniform1f(uLens, ls);
+    gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
     raf = requestAnimationFrame(frame);
   };
-  const kick = () => { if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); } };
+  const kick = () => { if (!raf) raf = requestAnimationFrame(frame); };
   new IntersectionObserver(([e]) => { visible = e.isIntersecting; kick(); }).observe(cv);
   document.addEventListener("visibilitychange", kick);
   kick();
