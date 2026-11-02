@@ -301,10 +301,11 @@ CARDS.forEach(c => {
   const VS = `attribute vec2 a; void main() { gl_Position = vec4(a, 0.0, 1.0); }`;
   const FS = `
     precision highp float;
-    uniform sampler2D sharp, soft;   // sharp: 字形 a；soft: r 近处余热, g 远处余热
+    uniform sampler2D soft;   // r 字芯, g 红色范围的余热, b 紫色范围的余热
     uniform vec2 res, mouse;
     uniform float t, lens, dpr, k, R;
     float hash(vec2 q) { return fract(sin(dot(q, vec2(127.1, 311.7))) * 43758.5453); }
+    float grain(vec2 q) { vec3 a = fract(vec3(q.xyx) * 0.1031); a += dot(a, a.yzx + 33.33); return fract((a.x + a.y) * a.z); }
     float n(vec2 p) {
       vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
       return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
@@ -330,14 +331,15 @@ CARDS.forEach(c => {
       w += (vec2(n(q / 60.0 + vec2(3.0, t * 0.2)), n(q / 60.0 + vec2(t * 0.17, 9.0))) - 0.5) * 3.5;
       w += vec2(sin(q.y * 0.017 + t * 0.33) * 3.0, sin(q.x * 0.009 - t * 0.27) * 3.5);
       vec2 uv = (p + w * k) / res;
-      /* 温度：字芯最热，向外冷却，再叠一层缓慢起伏的温差 */
-      float s = texture2D(sharp, uv).a;
-      vec4 so = texture2D(soft, uv);
-      float T = s * 0.56 + so.r * 0.30 + so.g * 0.22;
-      T += (n(q / 130.0 + t * 0.07) - 0.5) * 0.24 * smoothstep(0.05, 0.5, T);
-      T = mix(T, floor(T * 16.0 + 0.5) / 16.0, 0.5 * smoothstep(0.18, 0.34, T));    // 高温区的等温线色带
-      T = clamp(T, 0.0, 0.95);
-      float al = smoothstep(0.02, 0.34, T);
+      /* 温度：没有清晰边界，字芯 -> 红 -> 紫 都是大范围渐变 */
+      vec3 h = texture2D(soft, uv).rgb;
+      float T = h.r * 0.58 + h.g * 0.42 + h.b * 0.26;
+      T += (n(q / 130.0 + t * 0.07) - 0.5) * 0.14 * smoothstep(0.05, 0.5, T);
+      /* 胶片颗粒：每秒换 12 次；低温区靠颗粒溶解到背景里 */
+      float g = grain(floor(gl_FragCoord.xy / dpr) + floor(t * 12.0) * 37.0);
+      float al = smoothstep(0.02, 0.36, T);            // 没有热量的地方完全透明，不出颗粒
+      T = clamp(T + (g - 0.5) * 0.13 * smoothstep(0.0, 0.1, T), 0.0, 0.97);
+      al = mix(al, step(g, al) * smoothstep(0.03, 0.14, al), 0.22);
       gl_FragColor = vec4(ironbow(T) * al, al);
     }`;
   const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return o; };
@@ -353,15 +355,10 @@ CARDS.forEach(c => {
   gl.clearColor(0, 0, 0, 0);
   const U = n => gl.getUniformLocation(prog, n);
   const uRes = U("res"), uMouse = U("mouse"), uT = U("t"), uLens = U("lens"), uDpr = U("dpr"), uK = U("k"), uR = U("R");
-  gl.uniform1i(U("sharp"), 0); gl.uniform1i(U("soft"), 1);
-  const tex = unit => {
-    const o = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, o);
-    [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
-     [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]].forEach(([a, b]) => gl.texParameteri(gl.TEXTURE_2D, a, b));
-    return o;
-  };
-  tex(0); tex(1);
+  gl.uniform1i(U("soft"), 0);
+  gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+  [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
+   [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]].forEach(([a, b]) => gl.texParameteri(gl.TEXTURE_2D, a, b));
 
   /* 三次盒式模糊，近似高斯 */
   const blur = (src, w, h, r) => {
@@ -392,9 +389,10 @@ CARDS.forEach(c => {
     const top = header.getBoundingClientRect().top;
     const boxTop = Math.min(...[header.querySelector("#sub"), header.querySelector(".meta")].map(e => e.getBoundingClientRect().top)) - top;
     const pad = parseFloat(getComputedStyle(header).paddingLeft);
-    const off = document.createElement("canvas"); off.width = cv.width; off.height = cv.height;
+    const sw = Math.max(2, W >> 1), sh2 = Math.max(2, H >> 1);   // 温度场用半分辨率算
+    const off = document.createElement("canvas"); off.width = sw; off.height = sh2;
     const g = off.getContext("2d", { willReadFrequently: true });
-    g.scale(dpr, dpr);
+    g.scale(sw / W, sh2 / H);
     g.font = `400 100px ${FONT}`;
     const wide = Math.max(...LINES.map(l => g.measureText(l).width));
     const LEAD = .92, size = Math.min((W - pad * 2) / wide * 100, (boxTop - 40) / (LINES.length * LEAD));
@@ -407,23 +405,18 @@ CARDS.forEach(c => {
     gl.uniform1f(uK, size / 175);
     lensR = Math.max(90, size * 1.05); gl.uniform1f(uR, lensR);
 
-    gl.activeTexture(gl.TEXTURE0);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, off);
-
-    /* 余热用低分辨率算 */
-    const sw = Math.max(2, W >> 2), sh2 = Math.max(2, H >> 2);
-    const small = document.createElement("canvas"); small.width = sw; small.height = sh2;
-    const sg = small.getContext("2d", { willReadFrequently: true });
-    sg.drawImage(off, 0, 0, sw, sh2);
-    const px = sg.getImageData(0, 0, sw, sh2).data, mask = new Float32Array(sw * sh2);
+    const px = g.getImageData(0, 0, sw, sh2).data, mask = new Float32Array(sw * sh2);
     for (let i = 0; i < mask.length; i++) mask[i] = px[i * 4 + 3] / 255;
-    const near = blur(mask, sw, sh2, Math.max(1, Math.round(size * .012)));
-    const far = blur(mask, sw, sh2, Math.max(2, Math.round(size * .035)));
+    const core = blur(mask, sw, sh2, Math.max(1, Math.round(size * .02)));
+    const red = blur(mask, sw, sh2, Math.max(2, Math.round(size * .085)));
+    const purple = blur(mask, sw, sh2, Math.max(4, Math.round(size * .2)));
     const rgba = new Uint8Array(sw * sh2 * 4);
     for (let i = 0; i < mask.length; i++) {
-      rgba[i * 4] = Math.min(255, near[i] * 300); rgba[i * 4 + 1] = Math.min(255, far[i] * 340); rgba[i * 4 + 3] = 255;
+      rgba[i * 4] = Math.min(255, core[i] * 340);
+      rgba[i * 4 + 1] = Math.min(255, red[i] * 430);
+      rgba[i * 4 + 2] = Math.min(255, purple[i] * 420);
+      rgba[i * 4 + 3] = 255;
     }
-    gl.activeTexture(gl.TEXTURE1);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, sw, sh2, 0, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
   };
   layout();
