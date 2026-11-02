@@ -16,8 +16,11 @@
     -webkit-font-smoothing:antialiased; }
   a { color:inherit; }
 
-  header { padding:56px 40px 28px; border-bottom:1px solid var(--line);
-    display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:24px; }
+  header { position:relative; overflow:hidden; min-height:88vh; padding:56px 40px 28px; border-bottom:1px solid var(--line);
+    display:flex; flex-wrap:wrap; align-items:flex-end; align-content:flex-end; justify-content:space-between; gap:24px; }
+  header > :not(#swirl) { position:relative; z-index:1; }
+  #swirl { position:absolute; inset:0; width:100%; height:100%; display:block; pointer-events:none;
+    -webkit-mask-image:linear-gradient(to bottom,#000 80%,transparent); mask-image:linear-gradient(to bottom,#000 80%,transparent); }
   h1 { font-size:clamp(44px,8vw,112px); line-height:.95; letter-spacing:-.02em; font-weight:300; }
   h1 span { display:block; font-size:.2em; letter-spacing:.35em; font-weight:400; color:var(--dim); margin-top:18px; }
   .meta { color:var(--dim); font-size:12px; line-height:1.8; text-align:right; }
@@ -65,6 +68,7 @@
 <body>
 
 <header>
+  <canvas id="swirl" aria-hidden="true"></canvas>
   <h1>COOLINGDOWN<br>LAB<span>图像实验室 · 图片处理程序合集</span></h1>
   <div class="meta">
     <b id="count"></b><br>
@@ -545,6 +549,92 @@ CARDS.forEach(c => {
   el.addEventListener("mouseenter", () => { t0 = performance.now(); raf = requestAnimationFrame(loop); });
   el.addEventListener("mouseleave", () => { cancelAnimationFrame(raf); });
 });
+
+/* ---------- 顶部粒子：绕屏幕前后旋转，近大远小、近虚远实 ---------- */
+(() => {
+  const cv = document.getElementById("swirl");
+  const gl = cv.getContext("webgl", { alpha: true, premultipliedAlpha: true, antialias: false });
+  if (!gl) return;
+  const VS = `
+    precision highp float;
+    attribute vec4 a;       // 半径, 初始角度, 高度, 随机数
+    attribute vec3 col;
+    uniform float t, aspect, H;
+    varying vec3 vCol; varying float vBlur, vAlpha;
+    const float CENTER = 6.0, FAR = 11.5, NEAR = 1.0;   // 旋转中心、最远、最近的深度
+    const float TILT = 0.30;
+    void main() {
+      float ang = a.y + t * 0.20 / sqrt(a.x / 3.0);
+      float y = a.z + 0.28 * sin(t * 0.35 + a.w * 40.0) + 0.5 * sin(ang * 2.0 + a.w * 6.0);
+      vec3 p = vec3(a.x * cos(ang), y, a.x * sin(ang));
+      p = vec3(p.x, p.y * cos(TILT) - p.z * sin(TILT), p.y * sin(TILT) + p.z * cos(TILT));
+      float depth = CENTER - p.z;                        // 到屏幕的距离，越小越近
+      float focal = 1.0 / tan(0.46);
+      gl_Position = vec4(p.x * focal / aspect / depth, p.y * focal / depth, 0.0, 1.0);
+      float blur = clamp((FAR * 0.62 - depth) / (FAR * 0.62 - NEAR), 0.0, 1.0);
+      blur = blur * blur;                                // 只有离得近才明显发虚
+      float base = (0.018 + 0.03 * fract(a.w * 17.0)) * H * focal / depth;
+      gl_PointSize = clamp(base * (1.0 + 3.2 * blur), 1.5, H * 0.34);
+      vBlur = blur; vCol = col;
+      vAlpha = mix(0.92, 0.2, sqrt(blur)) * smoothstep(NEAR * 0.7, NEAR * 1.5, depth);
+      if (depth < 0.3) gl_Position = vec4(2.0, 2.0, 0.0, 1.0);
+    }`;
+  const FS = `
+    precision mediump float;
+    varying vec3 vCol; varying float vBlur, vAlpha;
+    void main() {
+      float d = length(gl_PointCoord - 0.5) * 2.0;
+      float soft = mix(0.16, 1.0, vBlur);
+      float al = (1.0 - smoothstep(1.0 - soft, 1.0, d)) * vAlpha;
+      gl_FragColor = vec4(vCol * al, al);
+    }`;
+  const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return o; };
+  const prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return;
+  gl.useProgram(prog);
+
+  const PALETTE = [[255,92,168],[255,133,196],[255,61,142],[255,170,214],[255,92,168],[168,104,255],[196,140,255]];
+  const N = innerWidth < 700 ? 1300 : 2600, data = new Float32Array(N * 7);
+  for (let i = 0; i < N; i++) {
+    const c = PALETTE[Math.random() * PALETTE.length | 0];
+    const gauss = (Math.random() + Math.random() + Math.random()) / 1.5 - 1;
+    data.set([1.6 + 3.7 * Math.sqrt(Math.random()), Math.random() * 6.283, gauss * 2.1, Math.random(),
+      c[0] / 255, c[1] / 255, c[2] / 255], i * 7);
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+  const attr = (name, size, off) => {
+    const l = gl.getAttribLocation(prog, name);
+    gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, size, gl.FLOAT, false, 28, off);
+  };
+  attr("a", 4, 0); attr("col", 3, 16);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  gl.clearColor(0, 0, 0, 0);
+  const U = n => gl.getUniformLocation(prog, n), uT = U("t"), uA = U("aspect"), uH = U("H");
+
+  const resize = () => {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr;
+    gl.viewport(0, 0, cv.width, cv.height);
+    gl.uniform1f(uA, cv.width / cv.height); gl.uniform1f(uH, cv.height);
+  };
+  addEventListener("resize", resize); resize();
+
+  let visible = true, raf = 0;
+  const frame = now => {
+    raf = 0;
+    if (!visible || document.hidden) return;
+    gl.uniform1f(uT, now / 1000 + 40);
+    gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.POINTS, 0, N);
+    raf = requestAnimationFrame(frame);
+  };
+  const kick = () => { if (!raf) raf = requestAnimationFrame(frame); };
+  new IntersectionObserver(([e]) => { visible = e.isIntersecting; kick(); }).observe(cv);
+  document.addEventListener("visibilitychange", kick);
+  kick();
+})();
 
 /* ---------- 筛选 ---------- */
 const nav = document.getElementById("filters");
