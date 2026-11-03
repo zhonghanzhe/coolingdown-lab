@@ -59,7 +59,7 @@
 <aside>
   <h1>HEAT TYPE</h1>
   <p>热成像字标</p>
-  <div class="hint">把任意文字变成一块正在冷却的热源，效果和 COOLINGDOWN LAB 首页标题相同。鼠标靠近字会出现放大镜。</div>
+  <div class="hint">把任意文字变成一块正在冷却的热源，效果和 COOLINGDOWN LAB 首页标题相同。</div>
 
   <fieldset><legend>文字 TEXT</legend>
     <textarea id="text" spellcheck="false">COOLINGDOWN
@@ -112,12 +112,11 @@ LAB</textarea>
     <label>循环周期</label>
     <div class="seg" id="period"><button data-v="3">3s</button><button data-v="5" class="on">5s</button><button data-v="10">10s</button></div>
     <div class="hint" style="margin-top:6px">动画每个周期首尾相接。导出视频时选和周期一样的时长，就是无缝循环。</div>
-    <label class="check"><input id="lens" type="checkbox" checked> 鼠标放大镜</label>
     <label class="check"><input id="pause" type="checkbox"> 暂停</label>
   </fieldset>
 
   <fieldset><legend>PNG 序列 · 给 AE</legend>
-    <div class="hint">逐帧渲染一个完整循环，打包成 ZIP。没有掉帧，带透明（勾选透明背景时），不含放大镜。</div>
+    <div class="hint">逐帧渲染一个完整循环，打包成 ZIP。没有掉帧，带透明（勾选透明背景时）。</div>
     <label>帧率</label>
     <div class="seg" id="seqFps"><button data-v="24">24</button><button data-v="25">25</button><button data-v="30" class="on">30</button></div>
     <label>尺寸</label>
@@ -143,7 +142,7 @@ const S = {
   scale: .88, lead: .92, track: 0,
   W: 1920, H: 1080, bg: "#f8f8f6", alpha: false,
   palette: "ironbow", heat: 1, red: 1, purple: 1, grain: 1,
-  wander: 1, speed: 1, period: 5, lens: true, pause: false,
+  wander: 1, speed: 1, period: 5, pause: false,
 };
 
 /* ---------------- 着色器：与 LAB 首页标题相同，时间改成周期函数以便无缝循环 ---------------- */
@@ -151,8 +150,8 @@ const VS = `attribute vec2 a; void main() { gl_Position = vec4(a, 0.0, 1.0); }`;
 const FS = `
   precision highp float;
   uniform sampler2D soft, lut;  // soft: r 字芯, g 红色余热, b 紫色余热；lut: 色阶
-  uniform vec2 res, mouse;
-  uniform float t, ph, rs, lens, dpr, k, R, heat, grainAmt, wander, bgA;
+  uniform vec2 res;
+  uniform float t, ph, rs, dpr, k, heat, grainAmt, wander, bgA;
   uniform vec3 bg;
   const float TAU = 6.2831853;
   float hash(vec2 q) { return fract(sin(dot(q, vec2(127.1, 311.7))) * 43758.5453); }
@@ -165,9 +164,6 @@ const FS = `
   vec2 circ(float rate, float off) { return rate * rs * vec2(cos(ph + off), sin(ph + off)); }
   void main() {
     vec2 p = vec2(gl_FragCoord.x, res.y * dpr - gl_FragCoord.y) / dpr;
-    vec2 d = p - mouse;
-    float m = smoothstep(R, 0.0, length(d)) * lens;
-    p = mouse + d / (1.0 + 1.05 * m);
     vec2 q = p / k;
     float amp = 0.55 + 0.9 * n(q / 420.0 + circ(0.05, 0.0));
     vec2 w = vec2(n(q / 190.0 + circ(0.13, 1.0)), n(q / 190.0 + vec2(7.0, 0.0) + circ(0.11, 2.0))) - 0.5;
@@ -197,7 +193,7 @@ gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
 gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 gl.clearColor(0, 0, 0, 0);
-const U = {}; ["res", "mouse", "t", "ph", "rs", "lens", "dpr", "k", "R", "heat", "grainAmt", "wander", "bgA", "bg", "soft", "lut"]
+const U = {}; ["res", "t", "ph", "rs", "dpr", "k", "heat", "grainAmt", "wander", "bgA", "bg", "soft", "lut"]
   .forEach(n => U[n] = gl.getUniformLocation(prog, n));
 const mkTex = unit => {
   gl.activeTexture(gl.TEXTURE0 + unit); const tx = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tx);
@@ -252,7 +248,6 @@ const blur = (src, w, h, r) => {
   }
   return a;
 };
-let rects = [], lensR = 180;
 async function layout() {
   const { W, H } = S;
   const lines = S.text.split("\n").map(l => l.replace(/\s+$/, ""));
@@ -277,14 +272,8 @@ async function layout() {
   g.fillStyle = "#000"; g.textBaseline = "alphabetic"; g.textAlign = S.align;
   const blockH = ((lines.length - 1) * S.lead + .72) * size, top = (H - blockH) / 2 + .72 * size;
   const x = S.align === "left" ? pad : S.align === "right" ? W - pad : W / 2;
-  rects = lines.map((l, i) => {
-    const y = top + i * size * S.lead, lw = g.measureText(l).width;
-    g.fillText(l, x, y);
-    const x0 = S.align === "left" ? x : S.align === "right" ? x - lw : x - lw / 2;
-    return [x0, y - size * .72, x0 + lw, y];
-  });
+  lines.forEach((l, i) => g.fillText(l, x, top + i * size * S.lead));
   gl.uniform1f(U.k, size / 175);
-  lensR = Math.max(90, size * 1.05); gl.uniform1f(U.R, lensR);
 
   const px = g.getImageData(0, 0, sw, sh2).data, mask = new Float32Array(sw * sh2);
   for (let i = 0; i < mask.length; i++) mask[i] = px[i * 4 + 3] / 255;
@@ -305,15 +294,13 @@ async function layout() {
 
 /* ---------------- 画一帧 ---------------- */
 const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
-let lx = 0, ly = 0, ls = 0;
-function draw(t, dpr, opaque, lensOn = true) {
+function draw(t, dpr, opaque) {
   const T = ((t % S.period) + S.period) % S.period;
   gl.viewport(0, 0, cv.width, cv.height);
   gl.uniform2f(U.res, S.W, S.H); gl.uniform1f(U.dpr, dpr);
   gl.uniform1f(U.t, T); gl.uniform1f(U.ph, T / S.period * Math.PI * 2);
   gl.uniform1f(U.rs, S.period * S.speed / (Math.PI * 2));
   gl.uniform1f(U.heat, S.heat); gl.uniform1f(U.grainAmt, S.grain); gl.uniform1f(U.wander, S.wander);
-  gl.uniform2f(U.mouse, lx, ly); gl.uniform1f(U.lens, lensOn ? ls : 0);
   gl.uniform3fv(U.bg, hex(S.bg)); gl.uniform1f(U.bgA, opaque ? 1 : 0);
   gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
@@ -326,7 +313,7 @@ const setRes = f => {
 const comp = document.createElement("canvas"), cg = comp.getContext("2d");
 
 /* ---------------- 主循环 ---------------- */
-let clock = 0, last = performance.now(), cx = -1e4, cy = -1e4, busy = false;
+let clock = 0, last = performance.now(), busy = false;
 function fitFrame() {
   const r = stage.getBoundingClientRect(), padX = parseFloat(getComputedStyle(stage).paddingLeft) * 2;
   const k = Math.min((r.width - padX) / S.W, (r.height - padX) / S.H);
@@ -338,20 +325,11 @@ function loop(now) {
   const dt = Math.min(.1, (now - last) / 1000); last = now;
   if (!S.pause) clock += dt;
   if (busy) return;
-  const b = cv.getBoundingClientRect(), k = S.W / b.width;
-  const mx = (cx - b.left) * k, my = (cy - b.top) * k, on = S.lens && cx > -1e3;
-  let dist = 1e9;
-  if (on) for (const q of rects) dist = Math.min(dist, Math.hypot(Math.max(q[0] - mx, 0, mx - q[2]), Math.max(q[1] - my, 0, my - q[3])));
-  const want = on ? Math.max(0, Math.min(1, 1 - dist / (lensR * .6))) : 0;
-  ls += (want - ls) * .08;
-  if (on) { const e = ls < .02 ? 1 : .14; lx += (mx - lx) * e; ly += (my - ly) * e; }
   setRes(1);
   draw(clock, 1, !S.alpha);
   if (comp.width !== cv.width || comp.height !== cv.height) { comp.width = cv.width; comp.height = cv.height; }
   cg.fillStyle = S.bg; cg.fillRect(0, 0, comp.width, comp.height); cg.drawImage(cv, 0, 0);
 }
-addEventListener("pointermove", e => { cx = e.clientX; cy = e.clientY; }, { passive: true });
-document.documentElement.addEventListener("pointerleave", () => { cx = cy = -1e4; });
 
 /* ---------------- 控件 ---------------- */
 let relayT = 0;
@@ -396,7 +374,6 @@ seg("bgPreset", setBg);
 $("alpha").onchange = () => { S.alpha = $("alpha").checked; frameEl.classList.toggle("alpha", S.alpha); };
 seg("palette", v => { S.palette = v; setLut(); });
 seg("period", v => { S.period = +v; });
-$("lens").onchange = () => { S.lens = $("lens").checked; };
 $("pause").onchange = () => { S.pause = $("pause").checked; };
 addEventListener("resize", fitFrame);
 
@@ -407,7 +384,7 @@ async function renderStill(f, fmt) {
   busy = true;
   try {
     setRes(f);
-    // 镜头半径和颗粒都按设计像素算，放大导出时外观不变
+    // 颗粒按设计像素算，放大导出时外观不变
     draw(clock, f, fmt === "jpg" || !S.alpha);
     return LabExport.copyCanvas(cv);
   } finally { setRes(1); busy = false; }
@@ -439,7 +416,7 @@ $("seqGo").onclick = async () => {
     for (let i = 0; i < n; i++) {
       busy = true;
       setRes(seqScale);
-      draw(i / seqFps, seqScale, !S.alpha, false);
+      draw(i / seqFps, seqScale, !S.alpha);
       const blob = await new Promise(r => cv.toBlob(r, "image/png"));
       files.push({ name: `heat-type_${String(i).padStart(4, "0")}.png`, data: new Uint8Array(await blob.arrayBuffer()) });
       st.textContent = `渲染 ${i + 1} / ${n} 帧…`;
