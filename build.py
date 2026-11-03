@@ -135,6 +135,7 @@ def main():
         print("⚠️  这些源文件没有放进网站：", *missing, sep="\n  ")
 
     skin(manifest)
+    stats()
 
     template = (OUT / "template.html").read_text(encoding="utf-8")
     data = json.dumps(manifest, ensure_ascii=False, indent=1)
@@ -175,6 +176,18 @@ def skin(manifest):
         html = html[:first] + SKIN_BUILD + "\n" + html[first:]
         page.write_text(html, encoding="utf-8")
         print("接入皮肤：", page.name, mode)
+
+
+GC = '<script data-goatcounter="https://coolingdown.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script><!-- gc -->'
+
+
+def stats():
+    """访问统计（GoatCounter，和作品集同一个站点）。本人浏览器访问任意页面加 #toggle-goatcounter 即可不计入。"""
+    for page in [OUT / "template.html", *sorted(TOOLS.glob("*.html"))]:
+        html = page.read_text(encoding="utf-8")
+        if "<!-- gc -->" in html:
+            continue
+        page.write_text(html.replace("</head>", GC + "\n</head>", 1), encoding="utf-8")
 
 
 if __name__ == "__main__":
