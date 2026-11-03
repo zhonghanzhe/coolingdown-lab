@@ -24,6 +24,10 @@ EXCLUDE = {
 # 一张卡片 = 一个效果；versions 里多个文件 = 卡片上可切换的版本
 # art: 卡片缩略图的生成图案（见 template.html 里的 ART）
 CARDS = [
+    # ---------- 置顶：LAB 自己做的工具（没有原文件，tools/ 里的就是源码） ----------
+    dict(id="heat-type", cat="type", name="HEAT TYPE", zh="热成像字标", accent="#ff2a00", art="heattype",
+         desc="任意文字变成正在冷却的热源，同 LAB 首页标题。PNG 可透明，另有 MP4 / GIF 和给 AE 的透明 PNG 序列。",
+         versions=[("lab/heat-type.html", "标准")]),
     # ---------- 图像 ----------
     dict(id="vhs", cat="image", name="VHS-O-MATIC", zh="复古录像机", accent="#ff3300", art="vhs",
          desc="扫描线、色偏、噪点与时间码，把照片变成录像带截帧。",
@@ -78,10 +82,6 @@ CARDS = [
          desc="实时渲染的三维液态金属文字。",
          versions=[("type/液态金属字体/液态金属.html", "X · 液态金属"),
                    ("type/液态金属字体/液态金属进阶.html", "Z · 液态生物金属")]),
-    # LAB 自己做的工具（没有原文件，tools/ 里的就是源码）
-    dict(id="heat-type", cat="type", name="HEAT TYPE", zh="热成像字标", accent="#ff2a00", art="heattype",
-         desc="任意文字变成正在冷却的热源，同 LAB 首页标题。PNG 可透明，另有 MP4 / GIF 和给 AE 的透明 PNG 序列。",
-         versions=[("lab/heat-type.html", "标准")]),
 ]
 
 BACK_BUTTON = """
