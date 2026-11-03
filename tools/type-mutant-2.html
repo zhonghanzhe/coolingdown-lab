@@ -213,6 +213,7 @@
             display: block;
         }
     </style>
+<script src="../lab-skin.js" data-mode="2d"></script><!-- lab-skin -->
 </head>
 <body>
 
@@ -296,7 +297,8 @@
         <div class="charset-grid" id="grid"></div>
     </div>
 
-    <script>
+    <script>LabSkin.build()</script><!-- lab-skin -->
+<script>
         const config = {
             mode: 'neural', // 默认改用 neural 展示线条感
             isOutline: true, // 默认开启描边

@@ -93,6 +93,7 @@
         
         .loading { font-size: 0.8rem; color: #888; margin-top: 5px; display: none;}
     </style>
+<script src="../lab-skin.js" data-mode="2d"></script><!-- lab-skin -->
 </head>
 <body>
 
@@ -120,7 +121,8 @@
         </div>
     </div>
 
-    <script>
+    <script>LabSkin.build()</script><!-- lab-skin -->
+<script>
         const canvas = document.getElementById('editorCanvas');
         const ctx = canvas.getContext('2d');
         const uploadInput = document.getElementById('uploadInput');

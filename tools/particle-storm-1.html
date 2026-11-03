@@ -75,6 +75,7 @@
         @keyframes blink { 50% { opacity: 0; } }
         #recTime { float: right; font-family: monospace; font-size: 0.9rem; }
     </style>
+<script src="../lab-skin.js" data-mode="3d"></script><!-- lab-skin -->
 </head>
 <body>
 
@@ -138,7 +139,8 @@
     <div id="loading">✨ 粒子生成中...</div>
     <div id="canvas-container"></div>
 
-    <script>
+    <script>LabSkin.build()</script><!-- lab-skin -->
+<script>
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x000000);
@@ -168,7 +170,7 @@
 
         // 统一更新指针位置的函数
         function updatePointer(x, y) {
-            mouse.x = (x / window.innerWidth) * 2 - 1;
+            mouse.x = ((x - (window.__lxX || 0)) / window.innerWidth) * 2 - 1;   // 减去 LAB 侧栏宽度
             mouse.y = -(y / window.innerHeight) * 2 + 1;
         }
 

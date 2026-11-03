@@ -89,6 +89,7 @@
             color: var(--accent); font-weight: bold; z-index: 100; font-size: 1.2rem; flex-direction: column; gap:10px;
         }
     </style>
+<script src="../lab-skin.js" data-mode="2d"></script><!-- lab-skin -->
 </head>
 <body>
 
@@ -207,7 +208,8 @@
     
     <canvas id="processCanvas"></canvas>
 
-    <script>
+    <script>LabSkin.build()</script><!-- lab-skin -->
+<script>
         const canvas = document.getElementById('processCanvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         const asciiOutput = document.getElementById('asciiOutput');

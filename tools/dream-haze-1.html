@@ -116,6 +116,7 @@
         
         input[type="file"] { display: none; }
     </style>
+<script src="../lab-skin.js" data-mode="2d"></script><!-- lab-skin -->
 </head>
 <body>
 
@@ -159,7 +160,8 @@
         </div>
     </div>
 
-    <script>
+    <script>LabSkin.build()</script><!-- lab-skin -->
+<script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         

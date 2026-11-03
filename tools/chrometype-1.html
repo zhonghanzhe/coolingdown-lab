@@ -25,6 +25,7 @@
         .btn-main { background: var(--accent); color: #000; font-weight: bold; border: none; cursor: pointer; }
         #loading { position: absolute; top:50%; left:50%; transform:translate(-50%,-50%); color: var(--accent); }
     </style>
+<script src="../lab-skin.js" data-mode="3d"></script><!-- lab-skin -->
 </head>
 <body>
     <div class="controls">
@@ -63,7 +64,8 @@
     <div id="loading">正在锻造金属...</div>
     <div id="canvas-container"></div>
 
-    <script>
+    <script>LabSkin.build()</script><!-- lab-skin -->
+<script>
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
         // 创建一个程序化生成的环境贴图，用于反射

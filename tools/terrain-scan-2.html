@@ -39,6 +39,7 @@
         
         #loading { position: absolute; top:50%; left:50%; transform:translate(-50%,-50%); display: none;}
     </style>
+<script src="../lab-skin.js" data-mode="3d"></script><!-- lab-skin -->
 </head>
 <body>
     <div class="hud"></div>
@@ -74,7 +75,8 @@
     <div id="loading">ANALYZING DATA...</div>
     <div id="canvas-container"></div>
 
-    <script id="vertexShader" type="x-shader/x-vertex">
+    <script>LabSkin.build()</script><!-- lab-skin -->
+<script id="vertexShader" type="x-shader/x-vertex">
         uniform float uHeight;
         uniform sampler2D uTexture;
         varying float vElevation;

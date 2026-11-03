@@ -111,6 +111,7 @@
         
         #loadingText { position: absolute; color: var(--accent); pointer-events: none; display: none; font-weight: bold; text-shadow: 0 0 10px black;}
     </style>
+<script src="../lab-skin.js" data-mode="2d"></script><!-- lab-skin -->
 </head>
 <body>
 
@@ -181,7 +182,8 @@
 
     <canvas id="lutCanvas" width="256" height="1" style="display:none;"></canvas>
 
-    <script>
+    <script>LabSkin.build()</script><!-- lab-skin -->
+<script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const lutCanvas = document.getElementById('lutCanvas');

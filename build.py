@@ -134,6 +134,8 @@ def main():
     if missing:
         print("⚠️  这些源文件没有放进网站：", *missing, sep="\n  ")
 
+    skin(manifest)
+
     template = (OUT / "template.html").read_text(encoding="utf-8")
     data = json.dumps(manifest, ensure_ascii=False, indent=1)
     index = re.sub(r"/\*__DATA__\*/.*?/\*__END__\*/", lambda _: data, template, flags=re.S)
@@ -141,6 +143,38 @@ def main():
     n = sum(len(c["versions"]) for c in manifest)
     print(f"完成：{len(manifest)} 个效果，{n} 个工具页 → {OUT / 'index.html'}")
 
+
+
+SKIN_HEAD = '<script src="../lab-skin.js" data-mode="{mode}"></script><!-- lab-skin -->'
+SKIN_BUILD = '<script>LabSkin.build()</script><!-- lab-skin -->'
+NO_SKIN = {"heat-type"}   # HEAT TYPE 本身就是这个排版
+
+
+def skin(manifest):
+    """统一界面皮肤：把工具名写进 lab-skin.js，并给每个工具页接上皮肤（已接过的跳过）。"""
+    meta = {}
+    for c in manifest:
+        for v in c["versions"]:
+            slug = Path(v["href"]).stem
+            meta[slug] = {"name": c["name"], "zh": c["zh"], "desc": c["desc"], "versions": c["versions"]}
+    js = OUT / "lab-skin.js"
+    src = js.read_text(encoding="utf-8")
+    src = re.sub(r"/\*__META__\*/.*?/\*__END__\*/", lambda _: "/*__META__*/" + json.dumps(meta, ensure_ascii=False) + "/*__END__*/", src, flags=re.S)
+    js.write_text(src, encoding="utf-8")
+
+    for page in sorted(TOOLS.glob("*.html")):
+        if page.stem in NO_SKIN:
+            continue
+        html = page.read_text(encoding="utf-8")
+        if "<!-- lab-skin -->" in html:
+            continue
+        mode = "3d" if 'id="canvas-container"' in html else "2d"
+        html = html.replace("</head>", SKIN_HEAD.format(mode=mode) + "\n</head>", 1)
+        body = html.index("<body")
+        first = html.find("<script", body)   # 在页面自己的脚本运行之前重排，脚本拿到的就是新布局
+        html = html[:first] + SKIN_BUILD + "\n" + html[first:]
+        page.write_text(html, encoding="utf-8")
+        print("接入皮肤：", page.name, mode)
 
 
 if __name__ == "__main__":

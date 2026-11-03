@@ -1,0 +1,121 @@
+/* COOLINGDOWN LAB — 统一界面皮肤，配合 lab-skin.js。排版同 HEAT TYPE。 */
+:root { --lx-bg:#f8f8f6; --lx-fg:#111110; --lx-dim:#6e6e68; --lx-line:#d8d8d4; }
+
+html.lx, html.lx body { background:var(--lx-bg) !important; color:var(--lx-fg) !important; }
+html.lx body { margin:0 !important; padding:0 !important; min-height:100vh;
+  font-family:"IBM Plex Mono","SF Mono",ui-monospace,Menlo,"PingFang SC",monospace !important; -webkit-font-smoothing:antialiased; }
+.lx-hidden { display:none !important; }
+
+/* ---------- 侧栏 ---------- */
+.lx-side { box-sizing:border-box; background:var(--lx-bg); color:var(--lx-fg); border-right:1px solid var(--lx-line);
+  padding:22px 20px 90px; z-index:1000; text-align:left; }
+.lx-side *, .lx-side *::before, .lx-side *::after { box-sizing:border-box; }
+/* 工具自己的 h1 / p 样式（渐变字、发光、下划线）不能漏进侧栏标题 */
+.lx-head .lx-name, .lx-head .lx-zh, .lx-head .lx-desc { all:unset !important; display:block !important;
+  font-family:"IBM Plex Mono","SF Mono",ui-monospace,Menlo,"PingFang SC",monospace !important; -webkit-text-fill-color:currentColor !important; }
+.lx-head .lx-name::before, .lx-head .lx-name::after, .lx-head .lx-zh::before, .lx-head .lx-zh::after { content:none !important; display:none !important; }
+.lx-head .lx-name { font-size:15px !important; font-weight:300 !important; font-style:italic !important; letter-spacing:.01em !important; line-height:1.3 !important; color:var(--lx-fg) !important; }
+.lx-head .lx-zh { font-size:12px !important; font-weight:300 !important; letter-spacing:.12em !important; line-height:1.4 !important; margin:4px 0 14px !important; color:var(--lx-fg) !important; }
+.lx-head .lx-desc { font-size:11px !important; line-height:1.7 !important; color:var(--lx-dim) !important; }
+.lx-vers { display:flex; flex-wrap:wrap; gap:4px; margin-top:12px; }
+.lx-vers a { font-size:11px; letter-spacing:.06em; color:var(--lx-dim); text-decoration:none; border:1px solid var(--lx-line);
+  padding:6px 9px; border-radius:999px; transition:.15s; }
+.lx-vers a:hover { color:var(--lx-fg); border-color:#999; }
+.lx-vers a.on { color:var(--lx-bg); background:var(--lx-fg); border-color:var(--lx-fg); }
+
+.lx-controls { border-top:1px solid var(--lx-line); margin-top:16px; padding-top:6px; }
+
+/* 原控件面板：去掉卡片外观，只留内容 */
+.lx-side .controls, .lx-side .controls-panel {
+  position:static !important; inset:auto !important; transform:none !important; width:auto !important; max-width:none !important;
+  max-height:none !important; height:auto !important; min-height:0 !important; overflow:visible !important; margin:0 !important; padding:0 !important;
+  background:none !important; border:0 !important; border-radius:0 !important; box-shadow:none !important;
+  backdrop-filter:none !important; -webkit-backdrop-filter:none !important; display:flex !important; flex-direction:column !important;
+  gap:10px !important; opacity:1 !important; visibility:visible !important; }
+
+/* 统一文字 */
+.lx-side .lx-controls *:not(canvas):not(svg):not(svg *) {
+  font-family:inherit !important; text-shadow:none !important; box-shadow:none !important; color:var(--lx-fg) !important; text-transform:none !important; }
+.lx-side .lx-controls div:not([style*="background"]), .lx-side .lx-controls section, .lx-side .lx-controls fieldset,
+.lx-side .lx-controls span:not([style*="background"]), .lx-side .lx-controls p {
+  background:none !important; border-color:var(--lx-line) !important; border-radius:0 !important; }
+.lx-side .control-group, .lx-side .export-panel, .lx-side .rec-panel { padding:0 !important; margin:0 !important; border:0 !important; }
+
+/* 分组标题 = HEAT TYPE 的 legend：小号、宽字距、上方细线 */
+.lx-side .lx-controls h2, .lx-side .lx-controls h3, .lx-side .lx-controls h4, .lx-side .lx-controls .section-title, .lx-side .lx-controls legend {
+  font-size:10px !important; font-weight:400 !important; letter-spacing:.2em !important; color:var(--lx-dim) !important;
+  border:0 !important; border-top:1px solid var(--lx-line) !important; padding:14px 0 0 !important; margin:14px 0 2px !important; background:none !important; }
+
+.lx-side .lx-controls label { font-size:11px !important; font-weight:400 !important; letter-spacing:0 !important; line-height:1.5; margin:8px 0 4px !important; }
+.lx-side .lx-controls label span, .lx-side .lx-controls .val, .lx-side .lx-controls .value, .lx-side .lx-controls small,
+.lx-side .lx-controls .hint, .lx-side .lx-controls .status, .lx-side .lx-controls .loading, .lx-side .lx-controls .note,
+.lx-side .lx-controls p, .lx-side #statusText, .lx-side #msg { color:var(--lx-dim) !important; font-size:11px !important; line-height:1.7; }
+
+/* 输入 */
+/* 滑块：统一画成细灰轨道 + 黑色圆点，盖掉各工具自定义的发光滑块 */
+.lx-side input[type=range] { -webkit-appearance:none !important; appearance:none !important; width:100% !important; height:16px !important;
+  background:transparent !important; border:0 !important; padding:0 !important; margin:2px 0 !important; box-shadow:none !important; cursor:pointer; }
+.lx-side input[type=range]::-webkit-slider-runnable-track { -webkit-appearance:none !important; height:4px !important; border-radius:2px !important;
+  background:var(--lx-line) !important; border:0 !important; box-shadow:none !important; }
+.lx-side input[type=range]::-webkit-slider-thumb { -webkit-appearance:none !important; width:14px !important; height:14px !important; margin-top:-5px !important;
+  border-radius:50% !important; background:var(--lx-fg) !important; border:0 !important; box-shadow:none !important; }
+.lx-side input[type=range]::-moz-range-track { height:4px; border-radius:2px; background:var(--lx-line) !important; border:0; }
+.lx-side input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%; background:var(--lx-fg) !important; border:0; box-shadow:none; }
+.lx-side input[type=checkbox], .lx-side input[type=radio] { accent-color:var(--lx-fg) !important; }
+.lx-side select, .lx-side textarea, .lx-side input[type=text], .lx-side input[type=number] {
+  -webkit-appearance:auto; width:100% !important; font:inherit !important; font-size:12px !important; color:var(--lx-fg) !important;
+  background:#fff !important; border:1px solid var(--lx-line) !important; border-radius:4px !important; padding:7px 8px !important; height:auto !important; }
+.lx-side input[type=color] { width:34px !important; height:26px !important; border:1px solid var(--lx-line) !important; border-radius:4px !important;
+  padding:0 !important; background:none !important; }
+
+/* 按钮：细黑边，悬停反色；选中态反色 */
+.lx-side button, .lx-side .btn, .lx-side label[class*="btn"], .lx-side .file-upload, .lx-side a.btn {
+  display:block; width:100% !important; font:inherit !important; font-size:11px !important; font-weight:400 !important; letter-spacing:.06em !important;
+  color:var(--lx-fg) !important; background:none !important; border:1px solid var(--lx-fg) !important; border-radius:6px !important;
+  padding:9px !important; margin:6px 0 0 !important; text-align:center !important; cursor:pointer; transition:.15s !important; height:auto !important; }
+.lx-side button:hover, .lx-side .btn:hover, .lx-side label[class*="btn"]:hover, .lx-side .file-upload:hover,
+.lx-side button.active, .lx-side button.on, .lx-side button.selected, .lx-side .btn.active, .lx-side .btn.on {
+  background:var(--lx-fg) !important; color:var(--lx-bg) !important; }
+.lx-side button:hover *, .lx-side .btn:hover *, .lx-side button.active *, .lx-side label[class*="btn"]:hover * { color:var(--lx-bg) !important; }
+/* 一排并列的小按钮（模式切换之类）做成药丸 */
+.lx-side .btn-group, .lx-side .button-group, .lx-side .mode-btns, .lx-side .row { display:flex !important; flex-wrap:wrap; gap:4px !important; }
+.lx-side .btn-group > button, .lx-side .button-group > button, .lx-side .mode-btns > button, .lx-side .row > button {
+  width:auto !important; flex:1 1 auto; border-color:var(--lx-line) !important; color:var(--lx-dim) !important; border-radius:999px !important; padding:6px 9px !important; margin:0 !important; }
+.lx-side .btn-group > button.active, .lx-side .button-group > button.active, .lx-side .mode-btns > button.active, .lx-side .row > button.active,
+.lx-side .btn-group > button.on, .lx-side .row > button.on { background:var(--lx-fg) !important; color:var(--lx-bg) !important; border-color:var(--lx-fg) !important; }
+
+/* ---------- 布局（桌面） ---------- */
+@media (min-width: 761px) {
+  html.lx body { overflow:hidden !important; height:100vh; display:block !important; }
+  .lx-side { position:fixed; left:0; top:0; bottom:0; width:300px; overflow:auto; }
+  .lx-stage { position:fixed; left:300px; top:0; right:0; bottom:0; overflow:auto; box-sizing:border-box; padding:32px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; }
+  html.lx-3d #canvas-container { position:fixed !important; left:300px !important; top:0 !important; right:0 !important; bottom:0 !important;
+    width:auto !important; height:auto !important; }
+  html.lx-3d #canvas-container canvas { display:block; }
+  html.lx-3d #loading { left:calc(50% + 150px) !important; }
+}
+@media (max-width: 760px) {
+  html.lx body { display:flex !important; flex-direction:column-reverse !important; }
+  .lx-side { border-right:0; border-top:1px solid var(--lx-line); position:relative; }
+  .lx-stage { padding:16px; display:flex; flex-direction:column; align-items:center; }
+  html.lx-3d #canvas-container { position:relative !important; height:60vh !important; }
+}
+
+/* ---------- 画面区（2D） ---------- */
+.lx-stage > .main-layout, .lx-stage > .container, .lx-stage > .main-container {
+  display:flex !important; flex-direction:column !important; align-items:center !important; justify-content:center !important;
+  width:100% !important; max-width:none !important; height:100% !important; margin:0 !important; padding:0 !important; gap:16px !important;
+  background:none !important; border:0 !important; box-shadow:none !important; }
+.lx-stage .canvas-wrapper, .lx-stage .canvas-box, .lx-stage .canvas-container, .lx-stage .tv-frame {
+  flex:0 1 auto !important; min-width:0 !important; max-width:100% !important; min-height:0 !important; max-height:100% !important; width:auto !important;
+  margin:0 !important; padding:0 !important; border:0 !important; border-radius:0 !important; box-shadow:0 0 0 1px var(--lx-line) !important;
+  background:var(--lx-bg) !important; display:flex !important; align-items:center; justify-content:center; overflow:hidden !important; }
+.lx-stage .canvas-wrapper canvas, .lx-stage .canvas-box canvas, .lx-stage .canvas-container canvas, .lx-stage .tv-frame canvas {
+  max-width:100% !important; max-height:calc(100vh - 64px) !important; width:auto !important; height:auto !important; display:block; }
+/* 画面上叠的扫描线、准星等装饰保留；画面外的提示文字改成浅底配色 */
+.lx-stage .placeholder, .lx-stage .empty, .lx-stage .hint, .lx-stage #placeholder { color:var(--lx-dim) !important; text-shadow:none !important; }
+
+/* 返回按钮配浅色 */
+html.lx #__lab_back { color:var(--lx-fg) !important; background:rgba(248,248,246,.9) !important; border-color:var(--lx-line) !important; opacity:1 !important; }
+html.lx #__lab_back:hover { background:var(--lx-fg) !important; color:var(--lx-bg) !important; }

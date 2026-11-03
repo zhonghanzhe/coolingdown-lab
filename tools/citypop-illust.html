@@ -95,6 +95,7 @@
         input[type="file"] { display: none; }
         #loadingText { position: absolute; color: var(--accent-blue); pointer-events: none; display: none; font-weight: bold; background: rgba(255,255,255,0.8); padding: 10px 20px; border-radius: 20px;}
     </style>
+<script src="../lab-skin.js" data-mode="2d"></script><!-- lab-skin -->
 </head>
 <body>
 
@@ -160,7 +161,8 @@
     <canvas id="layer1" style="display: none;"></canvas>
     <canvas id="layer2" style="display: none;"></canvas>
 
-    <script>
+    <script>LabSkin.build()</script><!-- lab-skin -->
+<script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const layer1 = document.getElementById('layer1');
