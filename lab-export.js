@@ -304,7 +304,7 @@
         say('渲染中…');
         await sleep(30);
         try {
-          const c = await cfg.image.render(size);
+          const c = await cfg.image.render(size, fmt);
           if (!c || !c.width) throw new Error('没有拿到画面');
           if (c.width > MAX_SIDE || c.height > MAX_SIDE || c.width * c.height > MAX_AREA)
             throw new Error(`尺寸 ${c.width}×${c.height} 超过浏览器上限，请选小一档`);

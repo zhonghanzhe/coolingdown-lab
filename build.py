@@ -78,6 +78,10 @@ CARDS = [
          desc="实时渲染的三维液态金属文字。",
          versions=[("type/液态金属字体/液态金属.html", "X · 液态金属"),
                    ("type/液态金属字体/液态金属进阶.html", "Z · 液态生物金属")]),
+    # LAB 自己做的工具（没有原文件，tools/ 里的就是源码）
+    dict(id="heat-type", cat="type", name="HEAT TYPE", zh="热成像字标", accent="#ff2a00", art="heattype",
+         desc="任意文字变成正在冷却的热源，同 LAB 首页标题。PNG 可透明，另有 MP4 / GIF 和给 AE 的透明 PNG 序列。",
+         versions=[("lab/heat-type.html", "标准")]),
 ]
 
 BACK_BUTTON = """
