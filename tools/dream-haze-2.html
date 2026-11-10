@@ -9,7 +9,7 @@
             --bg: #0a0a0a; --panel: #141414; --text: #e0e0e0; --accent: #ff0055; --svg-btn: #00ffcc;
         }
         body {
-            font-family: system-ui, sans-serif; background-color: var(--bg); color: var(--text);
+            font-family: "IBM Plex Mono", "Noto Sans SC", monospace; background-color: var(--bg); color: var(--text);
             display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px;
         }
         h1 {
@@ -135,7 +135,7 @@
         // 初始化
         canvas.width = 800; canvas.height = 600;
         ctx.fillStyle = '#111'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#333'; ctx.font = '20px sans-serif'; ctx.textAlign = 'center'; ctx.fillText("请上传图片以开始", 400, 300);
+        ctx.fillStyle = '#333'; ctx.font = '20px "Noto Sans SC", sans-serif'; ctx.textAlign = 'center'; ctx.fillText("请上传图片以开始", 400, 300);
 
         Object.keys(inputs).forEach(key => {
             inputs[key].addEventListener('input', (e) => {
@@ -333,7 +333,7 @@
 <a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
 <style>
 #__lab_back{position:fixed;right:14px;bottom:14px;z-index:2147483647;
-  font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  font:600 11px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;
   color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
   padding:8px 11px;border-radius:999px;text-decoration:none;
   backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}

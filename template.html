@@ -7,12 +7,12 @@
 <meta name="color-scheme" content="light">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,300&family=Redaction+70&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,300&family=Redaction+70&family=Inter:wght@900&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root { --bg:#f8f8f6; --fg:#111110; --dim:#6e6e68; --line:#d8d8d4; }
   * { box-sizing:border-box; margin:0; padding:0; }
   body { background:var(--bg); color:var(--fg);
-    font-family:"IBM Plex Mono","SF Mono",ui-monospace,Menlo,"PingFang SC",monospace; min-height:100vh;
+    font-family:"IBM Plex Mono","Noto Sans SC",monospace; min-height:100vh;
     -webkit-font-smoothing:antialiased; }
   a { color:inherit; }
 
@@ -113,13 +113,13 @@ const ART = {
     g.fillStyle = "#f00"; g.fillRect(w * .3 + 3, h * .3, w * .4, h * .35);
     g.fillStyle = "#0ff"; g.fillRect(w * .3 - 3, h * .3, w * .4, h * .35);
     g.globalCompositeOperation = "source-over";
-    g.fillStyle = "#fff"; g.font = "bold 16px monospace";
+    g.fillStyle = "#fff"; g.font = 'bold 16px "IBM Plex Mono", monospace';
     g.fillText("PLAY ▶", 18, h - 40);
     g.fillText("00:" + String(12 + (t | 0) % 48).padStart(2, "0") + ":34", 18, h - 18);
   },
   ascii(g, w, h, t, a) {
     g.fillStyle = "#000"; g.fillRect(0, 0, w, h);
-    const ch = " .:-=+*#%@"; g.font = "10px monospace"; g.fillStyle = a;
+    const ch = " .:-=+*#%@"; g.font = '10px "IBM Plex Mono", monospace'; g.fillStyle = a;
     for (let y = 8; y < h; y += 10) for (let x = 0; x < w; x += 7) {
       const v = (field(x, y, t) + 4) / 8;
       g.fillText(ch[Math.min(9, v * 10 | 0)], x, y);
@@ -178,7 +178,7 @@ const ART = {
       g.fillStyle = thermalCol((field(x, y, t) + 4) / 8); g.fillRect(x, y, 5, 5);
     }
     g.strokeStyle = "rgba(255,255,255,.7)"; g.strokeRect(w / 2 - 18, h / 2 - 18, 36, 36);
-    g.fillStyle = "#fff"; g.font = "11px monospace"; g.fillText("36.8°C", w / 2 + 24, h / 2 + 4);
+    g.fillStyle = "#fff"; g.font = '11px "IBM Plex Mono", monospace'; g.fillText("36.8°C", w / 2 + 24, h / 2 + 4);
   },
   stretch(g, w, h, t) {
     g.fillStyle = "#000"; g.fillRect(0, 0, w, h);
@@ -240,7 +240,7 @@ const ART = {
   },
   type(g, w, h, t, a) {
     g.fillStyle = "#0d0d0d"; g.fillRect(0, 0, w, h);
-    g.font = `900 ${h * .62}px Helvetica, Arial, sans-serif`; g.textAlign = "center"; g.textBaseline = "middle";
+    g.font = `900 ${h * .62}px "Inter", sans-serif`; g.textAlign = "center"; g.textBaseline = "middle";
     for (let y = 0; y < h; y += 6) {
       g.save(); g.beginPath(); g.rect(0, y, w, 6); g.clip();
       const dx = Math.sin(y * .05 + t * 2) * 14;
@@ -256,7 +256,7 @@ const ART = {
     if (!F || F.font !== document.fonts.check(`400 50px "Redaction 70"`)) {
       const o = document.createElement("canvas"); o.width = cw; o.height = ch;
       const og = o.getContext("2d", { willReadFrequently: true });
-      og.textAlign = "center"; og.textBaseline = "middle"; og.font = `400 ${ch * .46}px "Redaction 70", Georgia, serif`;
+      og.textAlign = "center"; og.textBaseline = "middle"; og.font = `400 ${ch * .46}px "Redaction 70", serif`;
       const layer = b => { og.clearRect(0, 0, cw, ch); og.filter = `blur(${b}px)`; og.fillText("HEAT", cw / 2, ch / 2); return og.getImageData(0, 0, cw, ch).data; };
       const fs = ch * .46, [c, r, p] = [fs * .04, fs * .17, fs * .4].map(layer);   // 同首页标题的模糊半径
       const T = new Float32Array(cw * ch);
@@ -281,7 +281,7 @@ const ART = {
   },
   chrome(g, w, h, t, a) {
     g.fillStyle = "#000"; g.fillRect(0, 0, w, h);
-    g.font = `900 ${h * .72}px Helvetica, Arial, sans-serif`; g.textAlign = "center"; g.textBaseline = "middle";
+    g.font = `900 ${h * .72}px "Inter", sans-serif`; g.textAlign = "center"; g.textBaseline = "middle";
     const sh = Math.sin(t) * h * .3;
     const m = g.createLinearGradient(0, h * .15 + sh, 0, h * .85 + sh);
     ["#222", "#fff", "#555", a, "#eee", "#111"].forEach((c, i, arr) => m.addColorStop(i / (arr.length - 1), c));
@@ -327,7 +327,7 @@ CARDS.forEach(c => {
   const header = document.querySelector("header"), cv = document.getElementById("heat");
   const gl = cv.getContext("webgl", { alpha: true, premultipliedAlpha: true, antialias: false });
   if (!gl) return;
-  const FONT = '"Redaction 70", Georgia, serif', LINES = ["COOLINGDOWN", "LAB"];
+  const FONT = '"Redaction 70", serif', LINES = ["COOLINGDOWN", "LAB"];
   try { await document.fonts.load(`400 100px "Redaction 70"`, "COOLINGDOWN LAB"); } catch (_) {}
 
   const VS = `attribute vec2 a; void main() { gl_Position = vec4(a, 0.0, 1.0); }`;

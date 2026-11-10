@@ -7,13 +7,14 @@
 <meta name="color-scheme" content="light">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Redaction+70&family=Redaction+70:ital@1&family=Redaction+100&family=Instrument+Serif&family=Playfair+Display:wght@400;900&family=Inter:wght@400;800&family=Noto+Serif+SC:wght@400;900&family=Noto+Sans+SC:wght@400;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Redaction+70&family=Redaction+70:ital@1&family=Redaction+100&family=Instrument+Serif&family=Playfair+Display:wght@400;900&family=Inter:wght@400;800&family=Noto+Serif+SC:wght@400;900&family=Noto+Sans+SC:wght@300;400;500;900&display=swap" rel="stylesheet">
 <style>
   :root { --bg:#f8f8f6; --fg:#111110; --dim:#6e6e68; --line:#d8d8d4; }
   * { box-sizing:border-box; margin:0; padding:0; }
   html, body { height:100%; }
   body { background:var(--bg); color:var(--fg); display:flex; overflow:hidden;
-    font-family:"IBM Plex Mono","SF Mono",ui-monospace,Menlo,"PingFang SC",monospace; -webkit-font-smoothing:antialiased; }
+    font-family:"IBM Plex Mono","Noto Sans SC",monospace; -webkit-font-smoothing:antialiased; }
+  input, select, textarea, button { font-family:inherit; }
 
   aside { width:300px; flex:none; height:100%; overflow:auto; border-right:1px solid var(--line); padding:22px 20px 90px; }
   aside h1 { font-size:15px; font-weight:300; font-style:italic; letter-spacing:.01em; }
@@ -256,7 +257,7 @@ async function layout() {
   while (lines.length && !lines[lines.length - 1]) lines.pop();
   if (!lines.length) lines.push(" ");
   const [pre, fam] = S.font.split("|");
-  const fontAt = px => `${pre} ${px}px ${fam}, Georgia, serif`;
+  const fontAt = px => `${pre} ${px}px ${fam}, serif`;
   try { await document.fonts.load(fontAt(100), lines.join("")); } catch (_) {}
   const sw = Math.max(2, W >> 1), sh2 = Math.max(2, H >> 1);
   const off = document.createElement("canvas"); off.width = sw; off.height = sh2;
@@ -453,7 +454,7 @@ window.__heat = { S, layout, draw };
 <a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
 <style>
 #__lab_back{position:fixed;right:14px;bottom:14px;z-index:2147483647;
-  font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  font:600 11px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;
   color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
   padding:8px 11px;border-radius:999px;text-decoration:none;
   backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}

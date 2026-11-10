@@ -21,7 +21,7 @@
   /* 字体和样式表 */
   const base = me ? me.src.replace(/lab-skin\.js.*$/, '') : '../';
   document.write(
-    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap">' +
+    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Noto+Sans+SC:wght@300;400;500&family=Courier+Prime:wght@400;700&family=Inter:wght@400;700;800;900&display=swap">' +
     `<link rel="stylesheet" href="${base}lab-skin.css">`);
   document.documentElement.classList.add('lx', 'lx-' + mode);
 

@@ -14,7 +14,7 @@
         }
 
         body {
-            font-family: 'Helvetica Neue', Arial, sans-serif;
+            font-family: "IBM Plex Mono", "Noto Sans SC", monospace;
             background-color: var(--bg);
             color: var(--text);
             margin: 0;
@@ -322,7 +322,7 @@
             
             ctx.fillStyle = '#fff'; 
             const fontSize = width * config.zoom; 
-            ctx.font = `bold ${fontSize}px Arial, Helvetica, sans-serif`;
+            ctx.font = `bold ${fontSize}px "Inter", sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             
@@ -448,6 +448,7 @@
         }
 
         updateMainPreview();
+        if (document.fonts) document.fonts.load('bold 100px "Inter"').then(() => { updateMainPreview(); generateAll(); }).catch(() => {});
         setTimeout(generateAll, 500);
 
     </script>
@@ -479,7 +480,7 @@
 <a href="../index.html" id="__lab_back" title="返回首页">&larr; LAB</a>
 <style>
 #__lab_back{position:fixed;right:14px;bottom:14px;z-index:2147483647;
-  font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  font:600 11px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;
   color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
   padding:8px 11px;border-radius:999px;text-decoration:none;
   backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}

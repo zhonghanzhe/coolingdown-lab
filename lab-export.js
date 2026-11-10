@@ -232,13 +232,13 @@
 
   /* ---------------- 面板 ---------------- */
   const CSS = `
-  #__lx_btn{all:initial;box-sizing:border-box;width:auto;height:auto;margin:0;text-transform:none;position:fixed;right:96px;bottom:14px;z-index:2147483647;font:600 11px/1 ui-monospace,Menlo,monospace;
+  #__lx_btn{all:initial;box-sizing:border-box;width:auto;height:auto;margin:0;text-transform:none;position:fixed;right:96px;bottom:14px;z-index:2147483647;font:600 11px/1 "IBM Plex Mono",monospace;
     letter-spacing:.12em;color:#000;background:#fff;border:1px solid #fff;padding:8px 12px;border-radius:999px;cursor:pointer;
     box-shadow:0 2px 14px rgba(0,0,0,.4)}
   #__lx_btn.rec{background:#ff2a2a;border-color:#ff2a2a;color:#fff;animation:__lxblink 1s infinite}
   @keyframes __lxblink{50%{opacity:.6}}
   #__lx_panel{position:fixed;right:14px;bottom:52px;z-index:2147483647;width:290px;max-height:calc(100vh - 70px);overflow:auto;
-    font:12px/1.5 ui-monospace,Menlo,"PingFang SC",monospace;color:#eee;background:rgba(12,12,12,.94);
+    font:12px/1.5 "IBM Plex Mono","Noto Sans SC",monospace;color:#eee;background:rgba(12,12,12,.94);
     border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:14px;display:none;
     backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 10px 40px rgba(0,0,0,.6);text-align:left}
   #__lx_panel.open{display:block}
